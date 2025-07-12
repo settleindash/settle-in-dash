@@ -1,0 +1,24 @@
+[
+  {
+    "id": "123",
+    "question": "Will Bitcoin exceed $100,000 by Dec 31, 2026?",
+    "stake": 10,
+    "odds": { "yes": 1.8, "no": 2.2 },
+    "category": "Crypto",
+    "status": "open",
+    "terminationDate": "2026-12-31T23:59:59Z",
+    "creator": "0xMockCreator",
+    "accepter": null
+  },
+  {
+    "id": "124",
+    "question": "Will Team A win the championship?",
+    "stake": 5,
+    "odds": { "yes": 2.0, "no": 1.9 },
+    "category": "Sports",
+    "status": "accepted",
+    "terminationDate": "2025-12-01T23:59:59Z",
+    "creator": "0xMockCreator",
+    "accepter": "0xMockAccepter"
+  }
+]
