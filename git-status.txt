@@ -1,0 +1,26 @@
+interactive rebase in progress; onto d0d50ae
+Last command done (1 command done):
+   pick e615448 Initial homepage setup for Settle In DASH
+No commands remaining.
+You are currently editing a commit while rebasing branch 'main' on 'd0d50ae'.
+  (use "git commit --amend" to amend the current commit)
+  (use "git rebase --continue" once you are satisfied with your changes)
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   index.html
+	modified:   src/App.jsx
+	modified:   src/assets/contract-icon.svg
+	deleted:    src/assets/logo.webp
+	modified:   src/assets/wallet-icon.svg
+	modified:   src/components/Header.jsx
+	modified:   src/components/Hero.jsx
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	git-status.txt
+	project-status.txt
+	src/assets/logo.jpg
+
+no changes added to commit (use "git add" and/or "git commit -a")

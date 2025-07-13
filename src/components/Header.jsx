@@ -7,7 +7,7 @@ export default function Header() {
   return (
     <header className="fixed top-0 w-full bg-primary text-white shadow-md z-10">
       <div className="max-w-7xl mx-auto px-4 py-2 flex justify-between items-center">
-        <img src="/src/assets/logo.webp" alt="Settle In DASH Logo" className="h-12" />
+        <img src="/src/assets/logo.jpg" alt="Settle In DASH Logo" className="h-12" />
         <nav className="hidden md:flex space-x-4">
           <Link to="/" className="hover:underline">Home</Link>
           <Link to="/marketplace" className="hover:underline">Marketplace</Link>
