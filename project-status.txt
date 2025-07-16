@@ -1,1 +1,4 @@
 Jeg arbejder på Settle In DASH i /Users/frederikhaahr/Desktop/settle-in-dash med Vite+React. Forsiden virker på http://localhost:5173 med Header, Hero, Featured Contracts, Why Section, og Footer. Logo er nu logo.jpg, og ikoner (contract-icon.svg, wallet-icon.svg) er tilføjet. Næste skridt er responsivitet (hamburger-menu), hosting på One.com, og CreateContract-interaktivitet.
+
+
+Jeg arbejder på Settle In DASH i /Users/frederikhaahr/Desktop/settle-in-dash med Vite+React. Forsiden virker på http://localhost:5173 med Header, Hero, Featured Contracts, Why Section, og Footer. Logo er nu logo.jpg, og ikoner (contract-icon.svg, wallet-icon.svg) er tilføjet. Næste skridt er responsivitet (hamburger-menu), hosting på One.com, og CreateContract-interaktivitet. Kan du hjælpe mig med at fortsætte herfra?

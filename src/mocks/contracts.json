@@ -1,24 +1,71 @@
 [
   {
-    "id": "123",
-    "question": "Will Bitcoin exceed $100,000 by Dec 31, 2026?",
+    "id": "1",
+    "question": "Will Bitcoin reach $100,000?",
+    "time": "2025-07-20T14:00:00.000Z",
     "stake": 10,
-    "odds": { "yes": 1.8, "no": 2.2 },
+    "percentage": 50,
     "category": "Crypto",
+    "email": "creator@example.com",
+    "terminationDate": "2025-07-21T14:00:00.000Z",
     "status": "open",
-    "terminationDate": "2026-12-31T23:59:59Z",
-    "creator": "0xMockCreator",
     "accepter": null
   },
-  {
-    "id": "124",
-    "question": "Will Team A win the championship?",
-    "stake": 5,
-    "odds": { "yes": 2.0, "no": 1.9 },
-    "category": "Sports",
+    {
+    "id": "2",
+    "question": "Will Bitcoin reach $110,000?",
+    "time": "2025-07-20T14:00:00.000Z",
+    "stake": 10,
+    "percentage": 50,
+    "category": "Crypto",
+    "email": "creator@example.com",
+    "terminationDate": "2025-07-21T14:00:00.000Z",
     "status": "accepted",
-    "terminationDate": "2025-12-01T23:59:59Z",
-    "creator": "0xMockCreator",
-    "accepter": "0xMockAccepter"
+    "accepter": "0xMockAccepter",
+    "accepterEmail": "accepter@example.com"
+  },
+  {
+    "id": "2",
+    "question": "Will Bitcoin reach $110,000?",
+    "time": "2025-07-20T14:00:00.000Z",
+    "stake": 10,
+    "percentage": 50,
+    "category": "Crypto",
+    "email": "creator@example.com",
+    "terminationDate": "2025-07-21T14:00:00.000Z",
+    "status": "cancelled",
+    "accepter": "0xMockAccepter",
+    "accepterEmail": "accepter@example.com"
+  },
+  {
+    "id": "2",
+    "question": "Will Bitcoin reach $110,000?",
+    "time": "2025-07-20T14:00:00.000Z",
+    "stake": 10,
+    "percentage": 50,
+    "category": "Crypto",
+    "email": "creator@example.com",
+    "terminationDate": "2025-07-21T14:00:00.000Z",
+    "status": "twist",
+    "accepter": "0xMockAccepter",
+    "accepterEmail": "accepter@example.com"
+  },
+  { "id": "4",
+    "question": "Will Ethereum reach $5,000?",
+    "time": "2025-07-20T14:00:00.000Z",
+    "stake": 20,
+    "percentage": 60,
+    "category": "Crypto",
+    "email": "creator@example.com",
+    "terminationDate": "2025-07-21T14:00:00.000Z",
+    "status": "twist",
+    "accepter": "0xMockAccepter",
+    "accepterEmail": "accepter@example.com",
+    "resolution": "Yes",
+    "resolutionDetails": {
+      "reasoning": "Market analysis predicted a bullish trend.",
+      "timestamp": "2025-07-21T15:00:00.000Z"
+    }
   }
+
 ]
