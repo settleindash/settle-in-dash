@@ -1,210 +1,266 @@
 // src/hooks/useContracts.js
-// This is a custom React hook for managing contracts (bets) in a web application.
-// It allows users to create, accept, settle, and trigger a "Twist" for contracts.
-// The creator is identified by their email, and acceptanceDeadline must be before or on event time.
+// Custom React hook for managing contracts (bets) via API.
+// Handles creating, accepting, settling, and triggering a "Twist" for contracts.
+// Provides filtered openContracts for the marketplace.
 
-import { useState } from "react";
-// Importing useState from React to manage the state of contracts.
+import { useState, useEffect } from "react";
 
-export const useContracts = (initialContracts) => {
-  // Custom hook that takes an optional initialContracts array and returns contract data and management functions.
+export const useContracts = () => {
+  const [contracts, setContracts] = useState([]);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const [contracts, setContracts] = useState(initialContracts || []);
-  // State variable 'contracts' initialized with initialContracts (or empty array if none provided).
-  // setContracts is used to update the contracts state.
+  // Determine API base URL based on environment
+  const API_BASE_URL = process.env.NODE_ENV === 'development'
+    ? 'http://localhost:8000/api'
+    : 'https://settleindash.com/api';
 
-  const createContract = (question, time, stake, percentage, category, email, acceptanceDeadline) => {
-    // Function to create a contract with fields: question, time, stake, percentage, category, email, and acceptanceDeadline.
+  // Fetch contracts on mount
+  useEffect(() => {
+    const fetchContracts = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/contracts.php`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        const data = await response.json();
+        setContracts(data);
+        console.log("useContracts: Fetched contracts", data);
+      } catch (err) {
+        setError(err.message);
+        console.error("useContracts: Error fetching contracts", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchContracts();
+  }, []);
 
+  const createContract = async (question, time, stake, percentage, category, email, acceptanceDeadline) => {
     console.log("useContracts: Creating contract with:", { question, time, stake, percentage, category, email, acceptanceDeadline });
-    // Logs input parameters for debugging, visible in the browser's Console (F12 in VSC).
 
-    // Validation for question: must end with a question mark.
+    // Client-side validation
     if (!question.endsWith("?")) {
       console.log("useContracts: Validation failed - no question mark");
       return { error: "Question must end with ?" };
     }
-
-    // Validation for stake: must be a number and at least 1 DASH.
     if (typeof stake !== "number" || stake < 1) {
       console.log("useContracts: Validation failed - invalid stake");
       return { error: "Minimum 1 DASH stake" };
     }
-
-    // Validation for percentage: must be a number between 0 and 100.
     if (typeof percentage !== "number" || percentage < 0 || percentage > 100) {
       console.log("useContracts: Validation failed - invalid percentage");
       return { error: "Percentage must be a number between 0 and 100" };
     }
-
-    // Email validation: checks for a simple email format (e.g., name@domain.com).
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       console.log("useContracts: Validation failed - invalid email");
       return { error: "Please provide a valid email address" };
     }
-
-    // Validation for time: ensure it's a valid date string and after current time.
-    const currentDateTime = new Date("2025-07-17T20:56:00+02:00");
-    if (isNaN(Date.parse(time))) {
-      console.log("useContracts: Validation failed - invalid time");
-      return { error: "Time must be a valid date and time" };
-    }
+    const currentDateTime = new Date();
     const eventTime = new Date(time);
-    if (eventTime <= currentDateTime) {
-      console.log("useContracts: Validation failed - event time in past or present");
-      return { error: "Event time must be after the current time" };
-    }
-
-    // Validation for acceptanceDeadline: ensure it's valid, before or on event time, and after current time.
-    if (isNaN(Date.parse(acceptanceDeadline))) {
-      console.log("useContracts: Validation failed - invalid acceptance deadline");
-      return { error: "Acceptance deadline must be a valid date and time" };
+    if (isNaN(eventTime) || eventTime <= currentDateTime) {
+      console.log("useContracts: Validation failed - invalid or past event time");
+      return { error: "Event time must be a valid date and after the current time" };
     }
     const deadline = new Date(acceptanceDeadline);
+    if (isNaN(deadline) || deadline <= currentDateTime) {
+      console.log("useContracts: Validation failed - invalid or past acceptance deadline");
+      return { error: "Acceptance deadline must be a valid date and after the current time" };
+    }
     if (deadline > eventTime) {
       console.log("useContracts: Validation failed - acceptance deadline after event time");
       return { error: "Acceptance deadline must be before or on the event time" };
     }
-    if (deadline <= currentDateTime) {
-      console.log("useContracts: Validation failed - acceptance deadline in past");
-      return { error: "Acceptance deadline must be after the current time" };
-    }
 
-    const newContract = {
-      // Creates a new contract object with updated fields, excluding the 'creator' field.
-      id: String(contracts.length + 1), // Unique ID based on the number of existing contracts.
-      question, // The question for the contract (e.g., "Will it rain today?").
-      time, // The date and time when the event in the question starts (e.g., "2025-07-20T14:00:00").
-      stake, // The amount staked on the contract (in DASH).
-      percentage, // The percentage (0-100) of the total pot the creator is responsible for.
-      category, // The category of the contract (e.g., "Weather", "Sports").
-      email, // The creator's email, used as their identifier and for notifications.
-      acceptanceDeadline, // The date when the contract is no longer open for acceptance.
-      status: "open", // Initial status of the contract.
-      accepter: null, // Initially, no one has accepted the contract.
-    };
-    setContracts([...contracts, newContract]);
-    // Adds the new contract to the existing contracts array using the spread operator.
-    console.log("useContracts: New contract created:", JSON.stringify(newContract, null, 2));
-    // Logs the new contract details in a formatted JSON string for debugging.
-    alert("Contract created successfully! Copy the console output to src/mocks/contracts.json to persist.");
-    // Alerts the user to confirm creation and reminds them to update the mock file.
-    return { success: true };
-    // Returns a success object to indicate the contract was created.
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/contracts.php`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: String(contracts.length + 1),
+          question,
+          time,
+          stake,
+          percentage,
+          category,
+          email,
+          acceptanceDeadline,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const result = await response.json();
+      if (result.success) {
+        setContracts((prev) => [
+          ...prev,
+          {
+            id: result.id || String(contracts.length + 1),
+            question,
+            time,
+            stake,
+            percentage,
+            category,
+            email,
+            acceptanceDeadline,
+            status: "open",
+            accepter: null,
+            accepterEmail: null,
+            resolutionDetails: null,
+          },
+        ]);
+        console.log("useContracts: Contract created", result);
+        return { success: true };
+      }
+      throw new Error(result.error || "Failed to create contract");
+    } catch (err) {
+      setError(err.message);
+      console.error("useContracts: Error creating contract", err);
+      return { error: err.message };
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const acceptContract = (contractId, accepterEmail) => {
-    // Function to accept a contract, taking contractId and accepterEmail as parameters.
+  const acceptContract = async (contractId, accepterEmail) => {
     console.log("useContracts: Accepting contract:", contractId, "Accepter email:", accepterEmail);
-    // Logs the contract ID and accepter's email for debugging.
-
-    // Find the contract to check the creator's email and acceptance deadline.
     const contract = contracts.find((c) => c.id === contractId);
     if (!contract) {
       console.log("useContracts: Contract not found");
-      return alert("Contract not found");
+      return { error: "Contract not found" };
     }
 
-    // Check if the contract is still open for acceptance.
-    const currentDateTime = new Date("2025-07-17T20:56:00+02:00");
-    if (new Date(contract.acceptanceDeadline) < currentDateTime) {
-      console.log("useContracts: Contract acceptance deadline has passed");
-      return alert("Cannot accept contract: Acceptance deadline has passed");
-    }
-
-    // Validate accepter's email format.
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(accepterEmail)) {
       console.log("useContracts: Validation failed - invalid accepter email");
-      return alert("Please provide a valid accepter email address");
+      return { error: "Please provide a valid accepter email address" };
     }
 
-    // Check if the creator's email (contract.email) matches the accepter's email.
-    if (contract.email === accepterEmail) {
-      console.log("useContracts: Contract cancelled - creator and accepter emails are identical");
-      setContracts(
-        contracts.map((c) =>
-          c.id === contractId ? { ...c, status: "cancelled", accepter: "0xMockAccepter", accepterEmail } : c
-          // If emails match, set status to "cancelled" and store accepter's email for reference.
-        )
-      );
-      alert(`Contract ${contractId} cancelled! Creator and accepter cannot have the same email. Update src/mocks/contracts.json manually.`);
-      return;
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/contracts.php`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "accept", id: contractId, accepterEmail }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const result = await response.json();
+      if (result.success) {
+        setContracts((prev) =>
+          prev.map((c) =>
+            c.id === contractId
+              ? {
+                  ...c,
+                  status: c.email === accepterEmail ? "cancelled" : "accepted",
+                  accepter: c.email === accepterEmail ? null : "0xMockAccepter",
+                  accepterEmail: c.email === accepterEmail ? null : accepterEmail,
+                }
+              : c
+          )
+        );
+        console.log("useContracts: Contract accepted", result);
+        return result;
+      }
+      throw new Error(result.error || "Failed to accept contract");
+    } catch (err) {
+      setError(err.message);
+      console.error("useContracts: Error accepting contract", err);
+      return { error: err.message };
+    } finally {
+      setLoading(false);
     }
-
-    // Proceed with accepting the contract if emails are different and deadline hasn't passed.
-    setContracts(
-      contracts.map((c) =>
-        c.id === contractId && !c.accepter && c.status === "open"
-          ? { ...c, accepter: "0xMockAccepter", status: "accepted", accepterEmail } // Store accepterEmail for notifications.
-          : c
-          // If contract ID matches, no accepter exists, and status is open, update with mock accepter and status.
-      )
-    );
-    alert(`Contract ${contractId} accepted! Update src/mocks/contracts.json manually.`);
-    // Alerts the user to confirm acceptance and reminds them to update the mock file.
   };
 
-  const settleContract = (contractId, winnerEmail) => {
-    // Function to settle a contract, updated to use winnerEmail instead of winner (since creator is now identified by email).
+  const settleContract = async (contractId, winnerEmail) => {
     console.log("useContracts: Settling contract:", contractId, "Winner email:", winnerEmail);
-    // Logs the contract ID and winner's email for debugging.
     const contract = contracts.find((c) => c.id === contractId);
-    if (!contract) return alert("Contract not found");
-    // If no contract is found, shows an alert and exits.
-    if (contract.status !== "accepted") return alert("Contract not accepted");
-    // If contract isn't accepted, shows an alert and exits.
+    if (!contract) {
+      console.log("useContracts: Contract not found");
+      return { error: "Contract not found" };
+    }
 
-    // Validate winner's email format.
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(winnerEmail)) {
       console.log("useContracts: Validation failed - invalid winner email");
-      return alert("Please provide a valid winner email address");
+      return { error: "Please provide a valid winner email address" };
     }
 
-    // Calculate payout based on whether the winner is the creator (contract.email) or accepter (contract.accepterEmail).
-    const payout = winnerEmail === contract.email ? contract.stake * 0.97 : contract.stake * 0.95;
-    // Payout is 0.97x stake for creator, 0.95x for accepter.
-    alert(`Contract settled! ${winnerEmail} receives ${payout} DASH. Update src/mocks/contracts.json manually.`);
-    // Alerts the user with settlement details and reminds them to update the mock file.
-    setContracts(
-      contracts.map((c) =>
-        c.id === contractId ? { ...c, status: "settled" } : c
-        // Updates the contract status to "settled" if the ID matches.
-      )
-    );
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/contracts.php`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "settle", id: contractId, winnerEmail }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const result = await response.json();
+      if (result.success) {
+        setContracts((prev) =>
+          prev.map((c) => (c.id === contractId ? { ...c, status: "settled" } : c))
+        );
+        console.log("useContracts: Contract settled", result);
+        return result;
+      }
+      throw new Error(result.error || "Failed to settle contract");
+    } catch (err) {
+      setError(err.message);
+      console.error("useContracts: Error settling contract", err);
+      return { error: err.message };
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const triggerTwist = (contractId) => {
-    // Function to trigger a "Twist" (mock resolution) for a contract.
+  const triggerTwist = async (contractId) => {
     console.log("useContracts: Triggering Twist for contract:", contractId);
-    // Logs the contract ID for debugging.
     const contract = contracts.find((c) => c.id === contractId);
-    if (!contract) return alert("Contract not found");
-    // If no contract is found, shows an alert and exits.
-    if (contract.status !== "accepted") return alert("Contract not accepted");
-    // If contract isn't accepted, shows an alert and exits.
+    if (!contract) {
+      console.log("useContracts: Contract not found");
+      return { error: "Contract not found" };
+    }
 
-    setContracts(
-      contracts.map((c) =>
-        c.id === contractId
-          ? {
-              ...c,
-              status: "twist",
-              resolution: "Yes",
-              resolutionDetails: {
-                reasoning: "Mock Grok response based on public data",
-                timestamp: new Date().toISOString(),
-              },
-            }
-          : c
-      )
-    );
-    alert(`Twist triggered for contract ${contractId}! Grok resolved: Yes outcome. Update src/mocks/contracts.json manually.`);
-    // Alerts the user to confirm the Twist and reminds them to update the mock file.
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/contracts.php`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "twist", id: contractId }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const result = await response.json();
+      if (result.success) {
+        setContracts((prev) =>
+          prev.map((c) =>
+            c.id === contractId
+              ? {
+                  ...c,
+                  status: "twist",
+                  resolution: "Yes",
+                  resolutionDetails: {
+                    reasoning: "Mock Grok response based on public data",
+                    timestamp: new Date().toISOString(),
+                  },
+                }
+              : c
+          )
+        );
+        console.log("useContracts: Twist triggered", result);
+        return result;
+      }
+      throw new Error(result.error || "Failed to trigger twist");
+    } catch (err) {
+      setError(err.message);
+      console.error("useContracts: Error triggering twist", err);
+      return { error: err.message };
+    } finally {
+      setLoading(false);
+    }
   };
 
-  return { contracts, createContract, acceptContract, settleContract, triggerTwist };
-  // Returns the contracts state and management functions.
+  // Filter open contracts for marketplace
+  const openContracts = contracts.filter((c) => c.status === "open");
+
+  return { contracts, openContracts, createContract, acceptContract, settleContract, triggerTwist, error, loading };
 };

@@ -1,17 +1,11 @@
 // src/pages/Contract.jsx
-// This page displays details of a specific contract identified by its ID.
-// It uses the useContracts hook to access contract data and allows accepting open contracts with an email.
-// Prevents re-accepting contracts and displays status/accepter email clearly.
-
 import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useContracts } from "../hooks/useContracts";
-import mockContracts from "../mocks/contracts.json";
 
-// Contract component: Displays contract details and allows accepting open contracts.
 const Contract = () => {
   const { id } = useParams();
-  const { contracts, acceptContract } = useContracts(mockContracts);
+  const { contracts, acceptContract, error: apiError, loading } = useContracts();
   const [accepterEmail, setAccepterEmail] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -20,11 +14,28 @@ const Contract = () => {
 
   console.log("Contract: Contract data for ID", id, ":", contract);
 
+  if (loading) {
+    return <div className="min-h-screen bg-background p-4">Loading contract...</div>;
+  }
+
+  if (apiError) {
+    return (
+      <div className="min-h-screen bg-background p-4">
+        <header className="bg-primary text-white p-4">
+          <h1 className="text-2xl font-semibold">Contract Details</h1>
+        </header>
+        <main className="max-w-3xl mx-auto mt-6">
+          <p className="text-red-500">Error: {apiError}</p>
+        </main>
+      </div>
+    );
+  }
+
   if (!contract) {
     return <div className="min-h-screen bg-background p-4">Contract not found</div>;
   }
 
-  const handleAcceptContract = () => {
+  const handleAcceptContract = async () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(accepterEmail)) {
       setError("Please provide a valid email address");
@@ -36,16 +47,14 @@ const Contract = () => {
     setMessage("");
     console.log("Contract: Accepting contract with ID", id, "and email", accepterEmail);
 
-    if (contract.email === accepterEmail) {
-      setMessage(
-        `Contract ${id} cancelled! Creator and accepter cannot have the same email. Update src/mocks/contracts.json manually.`
-      );
-      acceptContract(id, accepterEmail);
-      return;
+    try {
+      const result = await acceptContract(id, accepterEmail);
+      setMessage(result.message || "Contract accepted successfully!");
+      navigate(`/contract/${id}`);
+    } catch (err) {
+      setError(err.message || "Failed to accept contract");
+      console.error("Contract: Error accepting contract", err);
     }
-
-    acceptContract(id, accepterEmail);
-    navigate(`/contract/${id}`); // Refresh page to show updated status
   };
 
   return (
@@ -104,8 +113,9 @@ const Contract = () => {
                 className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600"
                 onClick={handleAcceptContract}
                 aria-label={`Accept contract ${contract.question}`}
+                disabled={loading}
               >
-                Accept Contract
+                {loading ? "Processing..." : "Accept Contract"}
               </button>
             </div>
           )}
