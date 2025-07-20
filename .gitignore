@@ -1,4 +1,14 @@
+# Ignore Node.js dependencies
 node_modules/
+# Ignore build output
 dist/
+build/
+# Ignore environment files
 .env
+# Ignore macOS system files
 .DS_Store
+# Ignore sensitive configuration files
+config/
+config.php
+# Ignore logs
+*.log

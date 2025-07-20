@@ -27,7 +27,7 @@ const ContractCard = ({ contract, onAccept }) => {
       <p className="text-gray-600">Created by: {contract.email}</p>
       <p className="text-gray-600">Status: {contract.status}</p>
       <p className="text-gray-600">
-        Termination: {new Date(contract.terminationDate).toLocaleDateString()}
+        Acceptance Deadline: {new Date(contract.acceptanceDeadline).toLocaleDateString()}
       </p>
       {/* Show accept button for open contracts */}
       {contract.status === "open" && (

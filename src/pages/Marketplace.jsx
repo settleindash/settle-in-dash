@@ -1,5 +1,5 @@
 // src/pages/Marketplace.jsx
-// This component displays a paginated, filterable list of contracts.
+// This component displays a paginated, filterable list of open contracts.
 // It uses the useContracts hook to access contract data and allows accepting contracts with an email.
 // Wallet functionality is removed as email is now used to identify users.
 
@@ -8,8 +8,9 @@ import { useNavigate } from "react-router-dom"; // Import useNavigate for redire
 import ContractCard from "../components/ContractCard"; // Import ContractCard component for rendering individual contracts.
 import mockContracts from "../mocks/contracts.json"; // Import mock contract data.
 import { useContracts } from "../hooks/useContracts"; // Custom hook for contract-related logic.
+import { categories } from "../utils/categories"; // Import category list from separate file.
 
-// Marketplace component: Displays a paginated, filterable list of contracts.
+// Marketplace component: Displays a paginated, filterable list of open contracts.
 const Marketplace = () => {
   // Initialize state for contracts and acceptContract function using custom hook.
   const { contracts, acceptContract } = useContracts(mockContracts);
@@ -17,6 +18,12 @@ const Marketplace = () => {
   const [search, setSearch] = useState("");
   // State for category filter.
   const [category, setCategory] = useState("All");
+  // State for event time range filters.
+  const [eventTimeStart, setEventTimeStart] = useState("");
+  const [eventTimeEnd, setEventTimeEnd] = useState("");
+  // State for stake size range filters.
+  const [stakeMin, setStakeMin] = useState("");
+  const [stakeMax, setStakeMax] = useState("");
   // State for current page in pagination.
   const [page, setPage] = useState(1);
   // State for accepter email input (used when accepting a contract).
@@ -32,11 +39,16 @@ const Marketplace = () => {
   // Define number of contracts to display per page.
   const contractsPerPage = 10;
 
-  // Filter contracts based on category and search input.
+  // Filter contracts based on status, category, search, event time range, and stake range.
   const filteredContracts = contracts?.filter(
     (c) =>
+      c.status === "open" && // Show only open contracts.
       (category === "All" || c.category === category) && // Match category or show all.
-      c.question.toLowerCase().includes(search.toLowerCase()) // Case-insensitive search.
+      c.question.toLowerCase().includes(search.toLowerCase()) && // Case-insensitive search.
+      (!eventTimeStart || new Date(c.time) >= new Date(eventTimeStart)) && // Filter by start time.
+      (!eventTimeEnd || new Date(c.time) <= new Date(eventTimeEnd)) && // Filter by end time.
+      (!stakeMin || c.stake >= Number(stakeMin)) && // Filter by minimum stake.
+      (!stakeMax || c.stake <= Number(stakeMax)) // Filter by maximum stake.
   ) || []; // Fallback to empty array if contracts is undefined.
 
   // Slice filtered contracts for current page.
@@ -72,39 +84,126 @@ const Marketplace = () => {
     <div className="min-h-screen bg-background">
       {/* Main content area with centered max-width container */}
       <main className="p-4 max-w-7xl mx-auto">
-        {/* Search and filter controls */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          {/* Search input for filtering contracts by question text */}
-          <input
-            type="text"
-            placeholder="Search contracts..."
-            className="border p-2 rounded w-full sm:w-1/2"
-            value={search}
-            onChange={(e) => {
-              console.log("Marketplace: Search changed:", e.target.value);
-              setSearch(e.target.value); // Update search state.
-            }}
-            aria-label="Search contracts"
-          />
-          {/* Category filter dropdown */}
-          <select
-            value={category}
-            onChange={(e) => {
-              console.log("Marketplace: Category changed:", e.target.value);
-              setCategory(e.target.value); // Update category state.
-            }}
-            className="border p-2 rounded w-full sm:w-1/4"
-            aria-label="Filter by category"
-          >
-            <option>All</option>
-            <option>Crypto</option>
-            <option>Sports</option>
-            <option>Other</option>
-          </select>
+        {/* Search, category, time range, and stake range filters */}
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Search input for filtering contracts by question text */}
+            <div className="w-full sm:w-1/4">
+              <label htmlFor="search" className="block text-lg sm:text-xl font-bold text-primary mb-2">
+                Search contracts
+              </label>
+              <input
+                id="search"
+                type="text"
+                placeholder="Search contracts..."
+                className="border p-2 rounded w-full"
+                value={search}
+                onChange={(e) => {
+                  console.log("Marketplace: Search changed:", e.target.value);
+                  setSearch(e.target.value); // Update search state.
+                }}
+                aria-label="Search contracts"
+              />
+            </div>
+            {/* Category filter dropdown */}
+            <div className="w-full sm:w-1/4">
+              <label htmlFor="category" className="block text-lg sm:text-xl font-bold text-primary mb-2">
+                Filter by category
+              </label>
+              <select
+                id="category"
+                value={category}
+                onChange={(e) => {
+                  console.log("Marketplace: Category changed:", e.target.value);
+                  setCategory(e.target.value); // Update category state.
+                }}
+                className="border p-2 rounded w-full"
+                aria-label="Filter by category"
+              >
+                <option>All</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Event Time Range Filters */}
+            <div className="w-full sm:w-1/4">
+              <label htmlFor="eventTimeStart" className="block text-lg sm:text-xl font-bold text-primary mb-2">
+                Event Time Start
+              </label>
+              <input
+                id="eventTimeStart"
+                type="datetime-local"
+                className="border p-2 rounded w-full"
+                value={eventTimeStart}
+                onChange={(e) => {
+                  console.log("Marketplace: Event Time Start changed:", e.target.value);
+                  setEventTimeStart(e.target.value);
+                }}
+                aria-label="Event time start filter"
+              />
+            </div>
+            <div className="w-full sm:w-1/4">
+              <label htmlFor="eventTimeEnd" className="block text-lg sm:text-xl font-bold text-primary mb-2">
+                Event Time End
+              </label>
+              <input
+                id="eventTimeEnd"
+                type="datetime-local"
+                className="border p-2 rounded w-full"
+                value={eventTimeEnd}
+                onChange={(e) => {
+                  console.log("Marketplace: Event Time End changed:", e.target.value);
+                  setEventTimeEnd(e.target.value);
+                }}
+                aria-label="Event time end filter"
+              />
+            </div>
+            {/* Stake Size Range Filters */}
+            <div className="w-full sm:w-1/4">
+              <label htmlFor="stakeMin" className="block text-lg sm:text-xl font-bold text-primary mb-2">
+                Min Stake (DASH)
+              </label>
+              <input
+                id="stakeMin"
+                type="number"
+                className="border p-2 rounded w-full"
+                value={stakeMin}
+                onChange={(e) => {
+                  console.log("Marketplace: Min Stake changed:", e.target.value);
+                  setStakeMin(e.target.value);
+                }}
+                placeholder="Min stake"
+                aria-label="Minimum stake filter"
+              />
+            </div>
+            <div className="w-full sm:w-1/4">
+              <label htmlFor="stakeMax" className="block text-lg sm:text-xl font-bold text-primary mb-2">
+                Max Stake (DASH)
+              </label>
+              <input
+                id="stakeMax"
+                type="number"
+                className="border p-2 rounded w-full"
+                value={stakeMax}
+                onChange={(e) => {
+                  console.log("Marketplace: Max Stake changed:", e.target.value);
+                  setStakeMax(e.target.value);
+                }}
+                placeholder="Max stake"
+                aria-label="Maximum stake filter"
+              />
+            </div>
+          </div>
         </div>
+
         {/* Email input for accepting contracts */}
-        <div className="mb-6">
-          <label htmlFor="accepterEmail" className="block text-sm font-medium text-gray-700">
+        <div className="mb-6 mt-6">
+          <label htmlFor="accepterEmail" className="block text-lg sm:text-xl font-bold text-primary mb-2">
             Your Email (to accept contracts)
           </label>
           <input

@@ -63,7 +63,7 @@ const Contract = () => {
           <p className="text-gray-600">Creator Email: {contract.email}</p>
           <p className="text-gray-600">Status: {contract.status}</p>
           <p className="text-gray-600">
-            Termination: {new Date(contract.terminationDate).toLocaleDateString()}
+            Acceptance Deadline: {new Date(contract.acceptanceDeadline).toLocaleDateString()}
           </p>
           {contract.accepterEmail && (
             <p className="text-gray-600">Accepter Email: {contract.accepterEmail}</p>

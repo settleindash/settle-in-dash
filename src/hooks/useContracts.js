@@ -1,7 +1,7 @@
 // src/hooks/useContracts.js
 // This is a custom React hook for managing contracts (bets) in a web application.
 // It allows users to create, accept, settle, and trigger a "Twist" for contracts.
-// The creator is now identified by their email, so the 'creator' field is removed.
+// The creator is identified by their email, and acceptanceDeadline must be before or on event time.
 
 import { useState } from "react";
 // Importing useState from React to manage the state of contracts.
@@ -13,20 +13,20 @@ export const useContracts = (initialContracts) => {
   // State variable 'contracts' initialized with initialContracts (or empty array if none provided).
   // setContracts is used to update the contracts state.
 
-  const createContract = (question, time, stake, percentage, category, email, terminationDate) => {
-    // Function to create a contract with fields: question, time, stake, percentage, category, email, and terminationDate.
+  const createContract = (question, time, stake, percentage, category, email, acceptanceDeadline) => {
+    // Function to create a contract with fields: question, time, stake, percentage, category, email, and acceptanceDeadline.
 
-    console.log("useContracts: Creating contract with:", { question, time, stake, percentage, category, email, terminationDate });
+    console.log("useContracts: Creating contract with:", { question, time, stake, percentage, category, email, acceptanceDeadline });
     // Logs input parameters for debugging, visible in the browser's Console (F12 in VSC).
 
     // Validation for question: must end with a question mark.
-    if (!question.includes("?")) {
+    if (!question.endsWith("?")) {
       console.log("useContracts: Validation failed - no question mark");
       return { error: "Question must end with ?" };
     }
 
-    // Validation for stake: must be at least 1 DASH.
-    if (stake < 1) {
+    // Validation for stake: must be a number and at least 1 DASH.
+    if (typeof stake !== "number" || stake < 1) {
       console.log("useContracts: Validation failed - invalid stake");
       return { error: "Minimum 1 DASH stake" };
     }
@@ -44,16 +44,31 @@ export const useContracts = (initialContracts) => {
       return { error: "Please provide a valid email address" };
     }
 
-    // Validation for time: ensure it's a valid date string (e.g., "2025-07-20T14:00:00").
+    // Validation for time: ensure it's a valid date string and after current time.
+    const currentDateTime = new Date("2025-07-17T20:56:00+02:00");
     if (isNaN(Date.parse(time))) {
       console.log("useContracts: Validation failed - invalid time");
       return { error: "Time must be a valid date and time" };
     }
+    const eventTime = new Date(time);
+    if (eventTime <= currentDateTime) {
+      console.log("useContracts: Validation failed - event time in past or present");
+      return { error: "Event time must be after the current time" };
+    }
 
-    // Validation for terminationDate: ensure it's valid and after the event time.
-    if (isNaN(Date.parse(terminationDate)) || new Date(terminationDate) <= new Date(time)) {
-      console.log("useContracts: Validation failed - invalid termination date");
-      return { error: "Termination date must be valid and after the event time" };
+    // Validation for acceptanceDeadline: ensure it's valid, before or on event time, and after current time.
+    if (isNaN(Date.parse(acceptanceDeadline))) {
+      console.log("useContracts: Validation failed - invalid acceptance deadline");
+      return { error: "Acceptance deadline must be a valid date and time" };
+    }
+    const deadline = new Date(acceptanceDeadline);
+    if (deadline > eventTime) {
+      console.log("useContracts: Validation failed - acceptance deadline after event time");
+      return { error: "Acceptance deadline must be before or on the event time" };
+    }
+    if (deadline <= currentDateTime) {
+      console.log("useContracts: Validation failed - acceptance deadline in past");
+      return { error: "Acceptance deadline must be after the current time" };
     }
 
     const newContract = {
@@ -65,7 +80,7 @@ export const useContracts = (initialContracts) => {
       percentage, // The percentage (0-100) of the total pot the creator is responsible for.
       category, // The category of the contract (e.g., "Weather", "Sports").
       email, // The creator's email, used as their identifier and for notifications.
-      terminationDate, // The date when the contract ends and changes status.
+      acceptanceDeadline, // The date when the contract is no longer open for acceptance.
       status: "open", // Initial status of the contract.
       accepter: null, // Initially, no one has accepted the contract.
     };
@@ -84,11 +99,18 @@ export const useContracts = (initialContracts) => {
     console.log("useContracts: Accepting contract:", contractId, "Accepter email:", accepterEmail);
     // Logs the contract ID and accepter's email for debugging.
 
-    // Find the contract to check the creator's email.
+    // Find the contract to check the creator's email and acceptance deadline.
     const contract = contracts.find((c) => c.id === contractId);
     if (!contract) {
       console.log("useContracts: Contract not found");
       return alert("Contract not found");
+    }
+
+    // Check if the contract is still open for acceptance.
+    const currentDateTime = new Date("2025-07-17T20:56:00+02:00");
+    if (new Date(contract.acceptanceDeadline) < currentDateTime) {
+      console.log("useContracts: Contract acceptance deadline has passed");
+      return alert("Cannot accept contract: Acceptance deadline has passed");
     }
 
     // Validate accepter's email format.
@@ -111,13 +133,13 @@ export const useContracts = (initialContracts) => {
       return;
     }
 
-    // Proceed with accepting the contract if emails are different.
+    // Proceed with accepting the contract if emails are different and deadline hasn't passed.
     setContracts(
       contracts.map((c) =>
-        c.id === contractId && !c.accepter
+        c.id === contractId && !c.accepter && c.status === "open"
           ? { ...c, accepter: "0xMockAccepter", status: "accepted", accepterEmail } // Store accepterEmail for notifications.
           : c
-          // If contract ID matches and no accepter exists, update with mock accepter and status.
+          // If contract ID matches, no accepter exists, and status is open, update with mock accepter and status.
       )
     );
     alert(`Contract ${contractId} accepted! Update src/mocks/contracts.json manually.`);
@@ -134,6 +156,13 @@ export const useContracts = (initialContracts) => {
     if (contract.status !== "accepted") return alert("Contract not accepted");
     // If contract isn't accepted, shows an alert and exits.
 
+    // Validate winner's email format.
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(winnerEmail)) {
+      console.log("useContracts: Validation failed - invalid winner email");
+      return alert("Please provide a valid winner email address");
+    }
+
     // Calculate payout based on whether the winner is the creator (contract.email) or accepter (contract.accepterEmail).
     const payout = winnerEmail === contract.email ? contract.stake * 0.97 : contract.stake * 0.95;
     // Payout is 0.97x stake for creator, 0.95x for accepter.
@@ -148,12 +177,18 @@ export const useContracts = (initialContracts) => {
   };
 
   const triggerTwist = (contractId) => {
-    // Function to trigger a "Twist" (mock resolution) for a PLEASE assistant: a contract.
+    // Function to trigger a "Twist" (mock resolution) for a contract.
     console.log("useContracts: Triggering Twist for contract:", contractId);
     // Logs the contract ID for debugging.
+    const contract = contracts.find((c) => c.id === contractId);
+    if (!contract) return alert("Contract not found");
+    // If no contract is found, shows an alert and exits.
+    if (contract.status !== "accepted") return alert("Contract not accepted");
+    // If contract isn't accepted, shows an alert and exits.
+
     setContracts(
       contracts.map((c) =>
-        c.id === contractId && c.status === "accepted"
+        c.id === contractId
           ? {
               ...c,
               status: "twist",
