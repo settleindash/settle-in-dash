@@ -26,7 +26,7 @@ const Header = () => {
           <Link to="/" className="hover:underline">
             Home
           </Link>
-           {/* Link to Create contract page */}
+          {/* Link to Create contract page */}
           <Link to="/create" className="hover:underline">
             Create Contract
           </Link>
@@ -34,11 +34,15 @@ const Header = () => {
           <Link to="/marketplace" className="hover:underline">
             Marketplace
           </Link>
+          {/* Link to Settle page */}
+          <Link to="/settle" className="hover:underline">
+            Settle
+          </Link>
           {/* Link to Transparency page */}
           <Link to="/transparency" className="hover:underline">
             Transparency
           </Link>
-           {/* Link to Support page */}
+          {/* Link to Support page */}
           <Link to="/support" className="hover:underline">
             Support
           </Link>

@@ -11,28 +11,43 @@ import About from "./pages/About";
 import Support from "./pages/Support";
 import CreateContract from "./components/CreateContract";
 import Contract from "./pages/Contract";
+import Settle from "./pages/Settle"; // Import Settle component for new route
 
+// Main content component with routing and conditional footers
 const AppContent = () => {
   const location = useLocation();
+  // Show footers only on the home page
   const showFooters = location.pathname === "/";
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-background">
+      {/* Render header component */}
       <Header />
+      {/* Main content area with flexible growth */}
       <main className="flex-grow flex flex-col">
         <Routes>
+          {/* Home page route */}
           <Route path="/" element={<Home />} />
+          {/* Marketplace page route */}
           <Route path="/marketplace" element={<Marketplace />} />
+          {/* Settle page route for contract settlement */}
+          <Route path="/settle" element={<Settle />} />
+          {/* Transparency page route */}
           <Route path="/transparency" element={<Transparency />} />
+          {/* About page route */}
           <Route path="/about" element={<About />} />
+          {/* Support page route */}
           <Route path="/support" element={<Support />} />
+          {/* Create contract page route */}
           <Route path="/create" element={<CreateContract />} />
+          {/* Dynamic contract page route with ID parameter */}
           <Route path="/contract/:id" element={<Contract />} />
         </Routes>
       </main>
+      {/* Conditionally render footers on home page */}
       {showFooters && (
         <>
-          {/* Upper footer for Why Settle In DASH? with increased height */}
+          {/* Upper footer: Why Settle In DASH? */}
           <footer className="bg-blue-50 py-4 sm:py-6">
             <div className="max-w-3xl mx-auto px-4 sm:px-8">
               <h2 className="text-lg sm:text-xl font-semibold font-inter text-primary mb-2 sm:mb-3">
@@ -60,7 +75,7 @@ const AppContent = () => {
               </div>
             </div>
           </footer>
-          {/* Lower footer for contact and links */}
+          {/* Lower footer: Contact and social links */}
           <footer className="bg-primary text-white py-4 sm:py-6">
             <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4">
               <p className="font-inter text-sm sm:text-base">Settle In DASH</p>
@@ -76,6 +91,7 @@ const AppContent = () => {
   );
 };
 
+// Root component with wildcard route to render AppContent
 const App = () => {
   return (
     <Routes>

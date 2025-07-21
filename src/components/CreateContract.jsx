@@ -24,16 +24,22 @@ const CreateContract = () => {
   const { createContract } = useContracts(); // Get createContract function from useContracts hook.
   const navigate = useNavigate(); // Initialize navigate for redirecting to marketplace.
 
-  // Current date and time (08:50 PM CEST, July 17, 2025) for validation.
-  const currentDateTime = new Date("2025-07-17T20:50:00+02:00").toISOString();
-  // Format for datetime-local input (YYYY-MM-DDThh:mm).
-  const minDateTime = new Date("2025-07-17T20:50:00+02:00").toISOString().slice(0, 16);
+  // Current date and time dynamically set to now (e.g., 2025-07-21T18:26:00+02:00).
+  const currentDateTime = new Date().toISOString();
+  // Format for datetime-local input (YYYY-MM-DDThh:mm), adjusted for local timezone.
+  const minDateTime = new Date().toLocaleString("sv-SE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).replace(" ", "T");
 
   // Log form inputs for debugging (visible in browser Console, F12 in VSC).
   console.log("CreateContract: Form state:", { question, time, stake, percentage, category, email, acceptanceDeadline });
 
   // Handle form submission for creating a new contract.
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault(); // Prevent default form submission behavior (page reload).
     console.log("CreateContract: Form submitted:", { question, time, stake, percentage, category, email, acceptanceDeadline });
 
@@ -117,7 +123,7 @@ const CreateContract = () => {
     console.log("CreateContract: Calling createContract");
 
     // Attempt to create contract with provided details.
-    const result = createContract(
+    const result = await createContract(
       question,
       eventTime.toISOString(), // Convert time to ISO string for consistency.
       Number(stake), // Convert stake to number.
