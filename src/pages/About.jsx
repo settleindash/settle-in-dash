@@ -10,7 +10,7 @@ const About = () => (
       </p>
       <h2 className="text-xl font-semibold mt-6 mb-4">About the Founder</h2>
       <p className="text-gray-600">
-        Founded by Frederik Haahr, a passionate developer committed to advancing decentralized technologies. Contact: frederik500@msn.com
+        Founded by  a passionate developer committed to advancing decentralized technologies. Contact: 
       </p>
       <div className="mt-6">
         <Link

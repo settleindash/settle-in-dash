@@ -1,4 +1,103 @@
-Jeg arbejder på Settle In DASH i /Users/frederikhaahr/Desktop/settle-in-dash med Vite+React. Forsiden virker på http://localhost:5173 med Header, Hero, Featured Contracts, Why Section, og Footer. Logo er nu logo.jpg, og ikoner (contract-icon.svg, wallet-icon.svg) er tilføjet. Næste skridt er responsivitet (hamburger-menu), hosting på One.com, og CreateContract-interaktivitet.
+Thank you for confirming that the contract creation issue is resolved and the `c0j58fq2y_contractsdb` database is now updating correctly for your `SETTLE-IN-DASH` project! This is great progress. You’ve successfully built and uploaded the updated files to One.com, with `contracts.php` in `/frederik500@msn.com/settleindash.com/files/api/contracts.php` (using `date('Y-m-d 00:00:00')` for validations), `useContracts.js` configured for `https://settleindash.com/api/contracts.php`, and updated `Marketplace.jsx`, `ContractCard.jsx`, and `Contract.jsx` to handle contract display and creation. The marketplace displays only `open` contracts, and contract states (`open`, `accepted`, `cancelled`, `settled`, `twist`) are managed correctly. You’re not using a local test environment (`npx serve -s dist`), relying on production testing (`https://settleindash.com`). You’d like a status update and a new prompt to continue developing your website tomorrow, starting from this point.
 
+**Current Date and Time**: July 20, 2025, 04:46 PM CEST (server time in `contracts.php` rounded to `2025-07-20 00:00:00`).
 
-Jeg arbejder på Settle In DASH i /Users/frederikhaahr/Desktop/settle-in-dash med Vite+React. Forsiden virker på http://localhost:5173 med Header, Hero, Featured Contracts, Why Section, og Footer. Logo er nu logo.jpg, og ikoner (contract-icon.svg, wallet-icon.svg) er tilføjet. Næste skridt er responsivitet (hamburger-menu), hosting på One.com, og CreateContract-interaktivitet. Kan du hjælpe mig med at fortsætte herfra?
+### Step 1: Project Status
+Here’s a summary of the current state of your `SETTLE-IN-DASH` project:
+- **Backend**:
+  - `contracts.php`: Located in `/frederik500@msn.com/settleindash.com/files/api/contracts.php`, handles `GET`, `POST`, and `PUT` requests for contract management. Fixed issues:
+    - Typo (`$currentДатаTime` → `$currentDateTime`).
+    - Datetime format conversion (ISO 8601 to `YYYY-MM-DD HH:MM:SS` for `time` and `acceptanceDeadline`).
+    - Logs errors to `logs/php_errors.log`.
+  - Database: `c0j58fq2y_contractsdb` with `contracts` table, accessible via phpMyAdmin. User `c0j58fq2y_contractsdb` has necessary permissions.
+  - `config.php`: In `/frederik500@msn.com/settleindash.com/files/config/config.php`, 403 Forbidden via `.htaccess`.
+- **Frontend**:
+  - `useContracts.js`: Custom hook in `src/hooks/` using `https://settleindash.com/api/contracts.php`. Manages contract CRUD operations (`createContract`, `acceptContract`, `settleContract`, `triggerTwist`) and provides `openContracts` for the marketplace.
+  - `Marketplace.jsx`: In `src/pages/`, displays paginated, filterable `open` contracts using `ContractCard`. Features search, category, time, and stake filters, with a “Clear Filters” button.
+  - `ContractCard.jsx`: In `src/components/`, displays contract details (question, category, time, stake, percentage, email, status, deadline) as a preview, linking to `/contract/:id` for acceptance.
+  - `Contract.jsx`: In `src/pages/`, handles contract details view (`/contract/:id`) and creation (`/contract/new`). Includes a form for creating contracts and an accept button with email input for `open` contracts.
+  - `categories.js`: Assumed to exist in `src/utils/`, providing an array of categories (e.g., `["Crypto", "Sports", "Weather"]`).
+- **File Structure (Production)**:
+  ```
+  /frederik500@msn.com/settleindash.com/files/
+  ├── assets/
+  │   ├── index-CBJhf7zG.js
+  │   ├── index-CSPV3acy.css
+  ├── config/
+  │   ├── config.php
+  │   ├── .htaccess (Deny from all)
+  ├── logs/
+  │   ├── php_errors.log
+  │   ├── .htaccess (Deny from all)
+  ├── api/
+  │   └── contracts.php
+  ├── index.html
+  ├── .htaccess (React routing)
+  ```
+- **GitHub**:
+  - Local repo: `SETTLE-IN-DASH/` with `server/api/contracts.php`, `src/hooks/useContracts.js`, `src/pages/Marketplace.jsx`, `src/components/ContractCard.jsx`, `src/pages/Contract.jsx`.
+  - `.gitignore`: Excludes `node_modules/`, `dist/`, `build/`, `.env`, `.DS_Store`, `config/`, `config.php`, `*.log`, `mocks/`.
+  - Latest commits include fixes for contract creation, datetime formatting, and UI enhancements.
+- **Testing**:
+  - Production: `https://settleindash.com/marketplace` displays `open` contracts; `https://settleindash.com/contract/new` creates contracts successfully.
+  - Local: Not set up (no PHP server), so testing relies on production.
+- **Resolved Issues**:
+  - Fixed database update failure due to `$currentДатаTime` typo and incorrect datetime format in `contracts.php`.
+  - Removed redundant accept button in `ContractCard.jsx`, making it a preview linking to `Contract.jsx` for acceptance.
+  - Updated `useContracts.js` to remove client-side `id` generation, using server-generated `uniqid()`.
+
+### Step 2: New Prompt for Further Development
+To continue developing your website, here’s a proposed prompt to start a new task tomorrow, building on the current state. The prompt is flexible to allow you to specify new features (e.g., user authentication, contract search enhancements, or analytics) while maintaining the existing functionality.
+
+**Prompt**:
+> I’m developing my `SETTLE-IN-DASH` betting platform, hosted on One.com at `https://settleindash.com`. The backend uses `contracts.php` in `/frederik500@msn.com/settleindash.com/files/api/` to manage contracts in the `c0j58fq2y_contractsdb` MariaDB database, with validations using server time rounded to the day (`2025-07-20 00:00:00`). The frontend, built with React and React Router, includes:
+> - `useContracts.js`: A hook for CRUD operations (`createContract`, `acceptContract`, `settleContract`, `triggerTwist`) via `https://settleindash.com/api/contracts.php`, providing `openContracts` for the marketplace.
+> - `Marketplace.jsx`: Displays paginated, filterable `open` contracts (search, category, time, stake) using `ContractCard.jsx`.
+> - `ContractCard.jsx`: Shows contract details (question, category, time, stake, percentage, email, status, deadline) as a preview, linking to `/contract/:id`.
+> - `Contract.jsx`: Handles contract details (`/contract/:id`) and creation (`/contract/new`) with a form and email-based acceptance.
+> - `categories.js`: Provides category options.
+> 
+> The project is versioned in a GitHub repo (`SETTLE-IN-DASH/`) with `.gitignore` excluding sensitive files. I’m not using a local test environment, relying on production testing. Contract creation is working, and the marketplace displays `open` contracts correctly, with states (`open`, `accepted`, `cancelled`, `settled`, `twist`) managed properly.
+> 
+> I want to add new features to enhance the platform, such as [specify features, e.g., user authentication, advanced search, contract analytics, or notifications]. Please provide updated code for relevant files, ensure compatibility with the existing setup (database, API, frontend), and include steps to build, deploy to One.com, and test in production. Provide GitHub commit instructions and address any potential issues. If needed, suggest improvements to the current codebase (e.g., error handling, UI/UX, performance).
+
+**Suggestions for Features** (to customize the prompt tomorrow):
+1. **User Authentication**: Add login/register functionality to associate contracts with user accounts (e.g., using email/password or OAuth, storing users in a new `users` table).
+2. **Advanced Search**: Enhance `Marketplace.jsx` with server-side filtering (e.g., query parameters in `contracts.php` like `?status=open&category=Crypto`).
+3. **Contract Analytics**: Add a dashboard to display statistics (e.g., total contracts, stakes, categories) using a new API endpoint.
+4. **Notifications**: Implement email or in-app notifications for contract status changes (e.g., accepted, settled).
+5. **UI/UX Improvements**: Add sorting in `Marketplace.jsx` (e.g., by stake or deadline) or improve form validation in `Contract.jsx`.
+
+### Step 3: Next Steps
+- **Tomorrow’s Task**: Decide on specific features to add and customize the prompt. For example:
+  - “Add user authentication with email/password login, storing users in a new `users` table.”
+  - “Implement server-side filtering for the marketplace to reduce frontend load.”
+- **Prepare**: Review the current codebase and note any minor issues (e.g., UI bugs, performance concerns).
+- **Share**: When starting the new prompt, provide any additional files (e.g., `categories.js`) or specify the desired features.
+- **Local Testing**: If you want to set up a local PHP/MariaDB environment for easier testing, share your OS (Windows, macOS, Linux) for tailored guidance.
+
+### Step 4: Immediate Actions
+To ensure the project is stable before tomorrow:
+1. **Verify Functionality**:
+   - **Marketplace**: Visit `https://settleindash.com/marketplace` and confirm `open` contracts display, filters work, and clicking a contract navigates to `/contract/:id`.
+   - **Contract Creation**: Create another contract at `https://settleindash.com/contract/new` to confirm database updates.
+   - **Database**: In phpMyAdmin, run `SELECT * FROM contracts;` to verify new contracts.
+   - **Logs**: Check `/frederik500@msn.com/settleindash.com/files/logs/php_errors.log` for new errors.
+
+2. **Backup**:
+   - Export the `c0j58fq2y_contractsdb` database via phpMyAdmin.
+   - Save a copy of `/frederik500@msn.com/settleindash.com/files/` via FTP.
+
+3. **GitHub**:
+   - Confirm all updates are committed:
+     ```bash
+     cd /path/to/SETTLE-IN-DASH
+     git add .
+     git commit -m "Resolved contract creation issues and updated contracts.php"
+     git push origin main
+     ```
+
+### Step 5: Final Confirmation
+The project is in a stable state, with contract creation working and the marketplace displaying `open` contracts correctly. The codebase (`contracts.php`, `useContracts.js`, `Marketplace.jsx`, `ContractCard.jsx`, `Contract.jsx`) is deployed and functional in production. You’re ready to start a new development task tomorrow using the provided prompt, which can be tailored to your desired features.
+
+Please confirm any specific features you want to focus on tomorrow or share any minor issues observed during testing. If you have `categories.js` or other files to share, include them when starting the new prompt. Great work getting this resolved!

@@ -48,7 +48,7 @@ const AppContent = () => {
                 <div className="text-center">
                   <h3 className="text-sm sm:text-base font-semibold text-primary">Anonymous</h3>
                   <p className="text-gray-600 text-sm sm:text-base">
-                    Interact using only your email address.
+                    Interact using only your DASH wallet address (in test mode email address).
                   </p>
                 </div>
                 <div className="text-center">
@@ -64,9 +64,9 @@ const AppContent = () => {
           <footer className="bg-primary text-white py-4 sm:py-6">
             <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4">
               <p className="font-inter text-sm sm:text-base">Settle In DASH</p>
-              <p className="font-inter text-sm sm:text-base">Contact: frederik500@msn.com</p>
-              <a href="https://x.com" className="font-inter text-sm sm:text-base hover:underline">
-                X Link
+              <p className="font-inter text-sm sm:text-base">Contact: hello@SettleInDASH.com</p>
+              <a href="https://x.com/SettleInDASH" className="font-inter text-sm sm:text-base hover:underline">
+                Follow On X
               </a>
             </div>
           </footer>

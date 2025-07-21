@@ -1,118 +1,199 @@
 // src/pages/Transparency.jsx
-// This page displays a list of resolved contracts (status: "twist" with resolution).
-// It uses the useContracts hook with the updated contract structure (time, percentage, email).
-// Displays all relevant contract details, including accepted/cancelled statuses.
+// This page displays all contracts in a table for blockchain-like transparency, with filtering by status, event time, and contract ID.
+// Links to contract details page for full information, ensuring minimal redundancy.
 
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useContracts } from "../hooks/useContracts";
-import mockContracts from "../mocks/contracts.json";
 
-// Transparency component: Displays resolved and other contracts with their details.
 const Transparency = () => {
-  const { contracts } = useContracts(mockContracts);
-  // Filter for resolved contracts (status: "twist" with resolution)
-  const resolvedTwists = contracts.filter((c) => c.status === "twist" && c.resolution);
+  const { contracts, loading, error } = useContracts();
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [eventTimeStart, setEventTimeStart] = useState("");
+  const [eventTimeEnd, setEventTimeEnd] = useState("");
+  const [idFilter, setIdFilter] = useState("");
 
-  // Log contracts for debugging (visible in browser Console, F12 in VSC)
   console.log("Transparency: Contracts:", contracts);
-  console.log("Transparency: Resolved Twists:", resolvedTwists);
+
+  // Mask email for anonymity (e.g., frederik500@msn.com -> fre****@msn.com)
+  const maskEmail = (email) => {
+    if (!email) return "N/A";
+    const [local, domain] = email.split("@");
+    return `${local.slice(0, 3)}****@${domain}`;
+  };
+
+  // Format status for display
+  const formatStatus = (status) => {
+    const statusMap = {
+      open: "Open",
+      accepted: "Accepted",
+      cancelled: "Cancelled",
+      settled: "Settled",
+      twist: "Twist Resolved"
+    };
+    return statusMap[status] || status;
+  };
+
+  // Filter contracts
+  const filteredContracts = contracts?.filter(
+    (c) =>
+      (statusFilter === "All" || c.status === statusFilter) &&
+      (!eventTimeStart || new Date(c.time) >= new Date(eventTimeStart)) &&
+      (!eventTimeEnd || new Date(c.time) <= new Date(eventTimeEnd)) &&
+      (!idFilter || c.id.toLowerCase().includes(idFilter.toLowerCase()))
+  ) || [];
+
+  // Clear filters
+  const clearFilters = () => {
+    setStatusFilter("All");
+    setEventTimeStart("");
+    setEventTimeEnd("");
+    setIdFilter("");
+    console.log("Transparency: Filters cleared");
+  };
+
+  if (loading) {
+    return <div className="min-h-screen bg-background p-4">Loading contracts...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background p-4">
+        <header className="bg-primary text-white p-4">
+          <h1 className="text-2xl font-semibold">Transparency</h1>
+        </header>
+        <main className="max-w-7xl mx-auto p-4">
+          <p className="text-red-500">Error: {error}</p>
+        </main>
+      </div>
+    );
+  }
 
   return (
-    // Main container with minimum screen height and background color
     <div className="min-h-screen bg-background p-4">
-      <main className="max-w-3xl mx-auto mt-6">
-        <h2 className="text-xl font-semibold mb-4">Resolved Twists</h2>
-        {resolvedTwists.length === 0 ? (
-          <p className="text-gray-600">No resolved Twists yet.</p>
-        ) : (
-          <div className="space-y-4">
-            {resolvedTwists.map((contract) => (
-              <div
-                key={contract.id}
-                className="border rounded-lg p-4 bg-white shadow"
+      <header className="bg-primary text-white p-4">
+        <h1 className="text-2xl font-semibold">Transparency</h1>
+      </header>
+      <main className="max-w-7xl mx-auto p-4">
+        <h2 className="text-xl font-semibold mb-4">All Contracts</h2>
+        <div className="space-y-6 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="w-full sm:w-1/4">
+              <label htmlFor="statusFilter" className="block text-lg font-bold text-primary mb-2">
+                Filter by Status
+              </label>
+              <select
+                id="statusFilter"
+                value={statusFilter}
+                onChange={(e) => {
+                  console.log("Transparency: Status filter changed:", e.target.value);
+                  setStatusFilter(e.target.value);
+                }}
+                className="border p-2 rounded w-full"
+                aria-label="Filter by status"
               >
-                <h3 className="text-lg font-semibold">
-                  Contract #{contract.id}: {contract.question}
-                </h3>
-                <p className="text-gray-600">Category: {contract.category}</p>
-                <p className="text-gray-600">
-                  Event Time: {new Date(contract.time).toLocaleString()}
-                </p>
-                <p className="text-gray-600">Stake: {contract.stake} DASH</p>
-                <p className="text-gray-600">Creator's Percentage: {contract.percentage}%</p>
-                <p className="text-gray-600">Creator Email: {contract.email}</p>
-                {contract.accepterEmail && (
-                  <p className="text-gray-600">Accepter Email: {contract.accepterEmail}</p>
-                )}
-                <p className="text-gray-600">Status: {contract.status}</p>
-                <p className="text-gray-600">
-                  Termination: {new Date(contract.terminationDate).toLocaleDateString()}
-                </p>
-                <p className="text-gray-600">
-                  Outcome: {contract.resolution || "N/A"}
-                </p>
-                <p className="text-gray-600">
-                  Resolved: {contract.resolutionDetails?.timestamp
-                    ? new Date(contract.resolutionDetails.timestamp).toLocaleString()
-                    : "N/A"}
-                </p>
-                <p className="text-gray-600">
-                  Reasoning: {contract.resolutionDetails?.reasoning || "No reasoning provided"}
-                </p>
-                <Link
-                  to={`/contract/${contract.id}`}
-                  className="text-blue-500 hover:underline"
-                >
-                  View Contract
-                </Link>
-              </div>
-            ))}
+                <option>All</option>
+                <option>open</option>
+                <option>accepted</option>
+                <option>cancelled</option>
+                <option>settled</option>
+                <option>twist</option>
+              </select>
+            </div>
+            <div className="w-full sm:w-1/4">
+              <label htmlFor="eventTimeStart" className="block text-lg font-bold text-primary mb-2">
+                Event Time Start
+              </label>
+              <input
+                id="eventTimeStart"
+                type="datetime-local"
+                className="border p-2 rounded w-full"
+                value={eventTimeStart}
+                onChange={(e) => {
+                  console.log("Transparency: Event Time Start changed:", e.target.value);
+                  setEventTimeStart(e.target.value);
+                }}
+                aria-label="Event time start filter"
+              />
+            </div>
+            <div className="w-full sm:w-1/4">
+              <label htmlFor="eventTimeEnd" className="block text-lg font-bold text-primary mb-2">
+                Event Time End
+              </label>
+              <input
+                id="eventTimeEnd"
+                type="datetime-local"
+                className="border p-2 rounded w-full"
+                value={eventTimeEnd}
+                onChange={(e) => {
+                  console.log("Transparency: Event Time End changed:", e.target.value);
+                  setEventTimeEnd(e.target.value);
+                }}
+                aria-label="Event time end filter"
+              />
+            </div>
+            <div className="w-full sm:w-1/4">
+              <label htmlFor="idFilter" className="block text-lg font-bold text-primary mb-2">
+                Contract ID
+              </label>
+              <input
+                id="idFilter"
+                type="text"
+                placeholder="Search by ID..."
+                className="border p-2 rounded w-full"
+                value={idFilter}
+                onChange={(e) => {
+                  console.log("Transparency: ID filter changed:", e.target.value);
+                  setIdFilter(e.target.value);
+                }}
+                aria-label="Contract ID filter"
+              />
+            </div>
           </div>
-        )}
-        {/* List all contracts for transparency */}
-        <h2 className="text-xl font-semibold mt-8 mb-4">All Contracts</h2>
-        {contracts.length === 0 ? (
-          <p className="text-gray-600">No contracts available.</p>
+          <button
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            onClick={clearFilters}
+            aria-label="Clear all filters"
+          >
+            Clear Filters
+          </button>
+        </div>
+        {filteredContracts.length === 0 ? (
+          <p className="text-gray-600">No contracts found.</p>
         ) : (
-          <div className="space-y-4">
-            {contracts.map((contract) => (
-              <div
-                key={contract.id}
-                className="border rounded-lg p-4 bg-white shadow"
-              >
-                <h3 className="text-lg font-semibold">
-                  Contract #{contract.id}: {contract.question}
-                </h3>
-                <p className="text-gray-600">Category: {contract.category}</p>
-                <p className="text-gray-600">
-                  Event Time: {new Date(contract.time).toLocaleString()}
-                </p>
-                <p className="text-gray-600">Stake: {contract.stake} DASH</p>
-                <p className="text-gray-600">Creator's Percentage: {contract.percentage}%</p>
-                <p className="text-gray-600">Creator Email: {contract.email}</p>
-                {contract.accepterEmail && (
-                  <p className="text-gray-600">Accepter Email: {contract.accepterEmail}</p>
-                )}
-                <p className="text-gray-600">Status: {contract.status}</p>
-                {contract.status === "cancelled" && (
-                  <p className="text-yellow-500">
-                    Cancelled: Creator and accepter emails were identical.
-                  </p>
-                )}
-                {contract.status === "accepted" && (
-                  <p className="text-green-500">This contract has been accepted.</p>
-                )}
-                <p className="text-gray-600">
-                  Termination: {new Date(contract.terminationDate).toLocaleDateString()}
-                </p>
-                <Link
-                  to={`/contract/${contract.id}`}
-                  className="text-blue-500 hover:underline"
-                >
-                  View Contract
-                </Link>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="min-w-full bg-white border rounded-lg shadow">
+              <thead>
+                <tr className="bg-gray-100 border-b">
+                  <th className="p-4 text-left text-gray-700">ID</th>
+                  <th className="p-4 text-left text-gray-700">Question</th>
+                  <th className="p-4 text-left text-gray-700">Status</th>
+                  <th className="p-4 text-left text-gray-700">Event Time</th>
+                  <th className="p-4 text-left text-gray-700">Category</th>
+                  <th className="p-4 text-left text-gray-700">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredContracts.map((contract) => (
+                  <tr key={contract.id} className="border-b hover:bg-gray-50">
+                    <td className="p-4">{contract.id}</td>
+                    <td className="p-4">{contract.question}</td>
+                    <td className="p-4">{formatStatus(contract.status)}</td>
+                    <td className="p-4">{new Date(contract.time).toLocaleString()}</td>
+                    <td className="p-4">{contract.category}</td>
+                    <td className="p-4">
+                      <Link
+                        to={`/contract/${contract.id}`}
+                        className="text-blue-500 hover:underline"
+                        aria-label={`View details for contract ${contract.id}`}
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
         <div className="mt-6">
