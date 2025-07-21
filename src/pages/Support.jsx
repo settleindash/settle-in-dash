@@ -17,7 +17,7 @@ const Support = () => {
       <main className="max-w-3xl mx-auto mt-6">
         <h2 className="text-xl font-semibold mb-4">Get Help</h2>
         <p className="text-gray-600 mb-4">
-          Contact us at <a href="mailto:frederik500@msn.com" className="text-blue-500 hover:underline">hello@SettleInDASH.com</a> or use the form below.
+          Contact us at <a href="mailto:hello@SettleInDASH.com<" className="text-blue-500 hover:underline">hello@SettleInDASH.com</a> or use the form below.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

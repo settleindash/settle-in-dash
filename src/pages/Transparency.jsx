@@ -1,6 +1,6 @@
 // src/pages/Transparency.jsx
 // This page displays all contracts in a table for blockchain-like transparency, with filtering by status, event time, and contract ID.
-// Links to contract details page for full information, ensuring minimal redundancy.
+// Includes resolution and resolution reasoning for resolved contracts, linking to details page for full information.
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -32,6 +32,12 @@ const Transparency = () => {
       twist: "Twist Resolved"
     };
     return statusMap[status] || status;
+  };
+
+  // Truncate reasoning for table display
+  const truncateReasoning = (reasoning) => {
+    if (!reasoning) return "N/A";
+    return reasoning.length > 50 ? `${reasoning.slice(0, 50)}...` : reasoning;
   };
 
   // Filter contracts
@@ -170,6 +176,8 @@ const Transparency = () => {
                   <th className="p-4 text-left text-gray-700">Status</th>
                   <th className="p-4 text-left text-gray-700">Event Time</th>
                   <th className="p-4 text-left text-gray-700">Category</th>
+                  <th className="p-4 text-left text-gray-700">Resolution</th>
+                  <th className="p-4 text-left text-gray-700">Reasoning</th>
                   <th className="p-4 text-left text-gray-700">Details</th>
                 </tr>
               </thead>
@@ -181,6 +189,8 @@ const Transparency = () => {
                     <td className="p-4">{formatStatus(contract.status)}</td>
                     <td className="p-4">{new Date(contract.time).toLocaleString()}</td>
                     <td className="p-4">{contract.category}</td>
+                    <td className="p-4">{contract.resolution || "N/A"}</td>
+                    <td className="p-4">{truncateReasoning(contract.resolutionDetails?.reasoning)}</td>
                     <td className="p-4">
                       <Link
                         to={`/contract/${contract.id}`}
@@ -200,6 +210,7 @@ const Transparency = () => {
           <Link
             to="/marketplace"
             className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            aria-label="Back to Marketplace"
           >
             Back to Marketplace
           </Link>
