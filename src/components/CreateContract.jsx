@@ -145,9 +145,6 @@ const CreateContract = () => {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <header className="bg-primary text-white p-4">
-        <h1 className="text-2xl font-semibold">Create Contract</h1>
-      </header>
       <main className="max-w-3xl mx-auto mt-6">
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-6">
           {/* Category at the top with dynamic options */}

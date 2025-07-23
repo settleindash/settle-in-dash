@@ -14,14 +14,14 @@ const ContractCard = ({ contract }) => {
       accepted: "Accepted",
       cancelled: "Cancelled",
       settled: "Settled",
-      twist: "Twist Resolved"
+      twist: "Twist Resolved",
     };
     return statusMap[status] || status;
   };
 
   // Format date as YYYY-MM-DD
   const formatDate = (dateString) => {
-    return new Date(dateString).toISOString().split('T')[0];
+    return dateString ? new Date(dateString).toISOString().split("T")[0] : "Not set";
   };
 
   return (
@@ -33,6 +33,10 @@ const ContractCard = ({ contract }) => {
       >
         {contract.question}
       </Link>
+      <p className="text-gray-600">ID: {contract.id}</p>
+      <p className="text-gray-600">
+        Created At: {contract.created_at ? new Date(contract.created_at).toLocaleString() : "Not set"}
+      </p>
       <p className="text-gray-600">Category: {contract.category}</p>
       <p className="text-gray-600">Event Time: {new Date(contract.time).toLocaleString()}</p>
       <p className="text-gray-600">Stake: {contract.stake} DASH</p>

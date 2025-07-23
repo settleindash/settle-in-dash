@@ -2,59 +2,156 @@
 // This component renders the header with a logo and navigation links.
 // Wallet functionality is removed as email is now used to identify users in the useContracts hook.
 
-import { Link } from "react-router-dom"; // Import Link for navigation between pages.
+import { useState } from "react";
+import { Link, NavLink } from "react-router-dom";
 
-// Header component: Displays the site logo and navigation menu.
 const Header = () => {
-  // No wallet context is needed since email identifies users.
-  console.log("Header: Rendering header component"); // Log for debugging (visible in browser Console, F12 in VSC).
+  const [isOpen, setIsOpen] = useState(false);
+
+  const toggleMenu = () => {
+    setIsOpen(!isOpen);
+    console.log("Header: Hamburger menu toggled:", !isOpen);
+  };
+
+  console.log("Header: Rendering header component");
 
   return (
-    // Header section with primary background color and padding.
     <header className="bg-primary text-white p-4">
-      {/* Container to align logo and navigation with max width */}
-      <div className="flex justify-between items-center max-w-7xl mx-auto">
+      <div className="flex justify-center items-center max-w-7xl mx-auto gap-4">
         {/* Logo image for Settle In DASH */}
-        <img
-          src="src/assets/logo.jpg" // Assumes logo.jpg is in the src/assets folder.
-          alt="Settle In DASH"
-          className="h-[50px] w-[200px]" // Fixed height and width for logo.
-        />
-        {/* Navigation menu with links to different pages */}
-        <nav className="flex gap-4">
-          {/* Link to Home page */}
-          <Link to="/" className="hover:underline">
+        <Link to="/" aria-label="Settle In DASH Home">
+          <img
+            src="src/assets/logo.png"
+            alt="Settle In DASH"
+            className="h-[50px] w-[50px]"
+          />
+        </Link>
+        {/* Hamburger Icon for Mobile */}
+        <button
+          className="sm:hidden flex flex-col gap-1.5 w-8 h-8 justify-center items-center"
+          onClick={toggleMenu}
+          aria-label="Toggle navigation menu"
+        >
+          <span className="w-full h-0.5 bg-white"></span>
+          <span className="w-full h-0.5 bg-white"></span>
+          <span className="w-full h-0.5 bg-white"></span>
+        </button>
+        {/* Desktop Navigation */}
+        <nav className="hidden sm:flex gap-4">
+          <NavLink
+            to="/"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            aria-label="Home"
+          >
             Home
-          </Link>
-          {/* Link to Create contract page */}
-          <Link to="/create" className="hover:underline">
+          </NavLink>
+          <NavLink
+            to="/create"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            aria-label="Create Contract"
+          >
             Create Contract
-          </Link>
-          {/* Link to Marketplace page */}
-          <Link to="/marketplace" className="hover:underline">
+          </NavLink>
+          <NavLink
+            to="/marketplace"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            aria-label="Marketplace"
+          >
             Marketplace
-          </Link>
-          {/* Link to Settle page */}
-          <Link to="/settle" className="hover:underline">
+          </NavLink>
+          <NavLink
+            to="/settle"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            aria-label="Settle Contracts"
+          >
             Settle
-          </Link>
-          {/* Link to Transparency page */}
-          <Link to="/transparency" className="hover:underline">
+          </NavLink>
+          <NavLink
+            to="/transparency"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            aria-label="Transparency"
+          >
             Transparency
-          </Link>
-          {/* Link to Support page */}
-          <Link to="/support" className="hover:underline">
+          </NavLink>
+          <NavLink
+            to="/support"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            aria-label="Support"
+          >
             Support
-          </Link>
-          {/* Link to About page */}
-          <Link to="/about" className="hover:underline">
+          </NavLink>
+          <NavLink
+            to="/about"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            aria-label="About"
+          >
             About
-          </Link>
+          </NavLink>
         </nav>
       </div>
+      {/* Mobile Navigation (Dropdown) */}
+      {isOpen && (
+        <nav className="sm:hidden mt-4 flex flex-col gap-2">
+          <NavLink
+            to="/"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            onClick={() => setIsOpen(false)}
+            aria-label="Home"
+          >
+            Home
+          </NavLink>
+          <NavLink
+            to="/create"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            onClick={() => setIsOpen(false)}
+            aria-label="Create Contract"
+          >
+            Create Contract
+          </NavLink>
+          <NavLink
+            to="/marketplace"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            onClick={() => setIsOpen(false)}
+            aria-label="Marketplace"
+          >
+            Marketplace
+          </NavLink>
+          <NavLink
+            to="/settle"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            onClick={() => setIsOpen(false)}
+            aria-label="Settle Contracts"
+          >
+            Settle
+          </NavLink>
+          <NavLink
+            to="/transparency"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            onClick={() => setIsOpen(false)}
+            aria-label="Transparency"
+          >
+            Transparency
+          </NavLink>
+          <NavLink
+            to="/support"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            onClick={() => setIsOpen(false)}
+            aria-label="Support"
+          >
+            Support
+          </NavLink>
+          <NavLink
+            to="/about"
+            className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
+            onClick={() => setIsOpen(false)}
+            aria-label="About"
+          >
+            About
+          </NavLink>
+        </nav>
+      )}
     </header>
   );
 };
 
-// Export the Header component as default.
 export default Header;
