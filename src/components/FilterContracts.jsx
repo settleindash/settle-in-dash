@@ -1,4 +1,8 @@
 // src/components/FilterContracts.jsx
+// This component filters and displays contracts based on various criteria.
+// It supports filtering by category, search term, contract ID, event time, stake, and status,
+// using wallet address-based identification for user-specific filtering.
+
 import { useState, useEffect } from "react";
 import ContractCard from "./ContractCard";
 import { categories } from "../utils/categories";
@@ -6,7 +10,7 @@ import { categories } from "../utils/categories";
 const FilterContracts = ({
   contracts,
   statusFilter,
-  userEmail,
+  userWalletAddress, // Changed from userEmail to userWalletAddress
   onFilterChange,
   contractsPerPage = 20,
   disabledFilters = [],
@@ -18,7 +22,7 @@ const FilterContracts = ({
   const [eventTimeEnd, setEventTimeEnd] = useState("");
   const [stakeMin, setStakeMin] = useState("");
   const [stakeMax, setStakeMax] = useState("");
-  const [idFilter, setIdFilter] = useState("");
+  const [contractIdFilter, setContractIdFilter] = useState(""); // Changed from idFilter to contractIdFilter
   const [localStatusFilter, setLocalStatusFilter] = useState(statusFilter || "All");
   const [page, setPage] = useState(1);
 
@@ -47,13 +51,13 @@ const FilterContracts = ({
     return (
       (statusFilter === "user"
         ? (c.status === "accepted" || c.status === "twist") &&
-          (c.email === userEmail || c.accepterEmail === userEmail)
+          (c.WalletAddress === userWalletAddress || c.accepterWalletAddress === userWalletAddress) // Changed email/accepterEmail to WalletAddress/accepterWalletAddress
         : localStatusFilter === "All"
         ? true
         : c.status === localStatusFilter) &&
       (category === "All" || c.category === category) &&
       c.question.toLowerCase().includes(search.toLowerCase()) &&
-      (idFilter === "" || c.id.includes(idFilter)) &&
+      (contractIdFilter === "" || c.contract_id.includes(contractIdFilter)) && // Changed id to contract_id
       (!eventTimeStart || (contractTime && startTime && contractTime >= startTime)) &&
       (!eventTimeEnd || (contractTime && endTime && contractTime <= endTime)) &&
       (!stakeMin || c.stake >= Number(stakeMin)) &&
@@ -75,7 +79,7 @@ const FilterContracts = ({
     setEventTimeEnd("");
     setStakeMin("");
     setStakeMax("");
-    setIdFilter("");
+    setContractIdFilter(""); // Changed from setIdFilter to setContractIdFilter
     setLocalStatusFilter(statusFilter || "All");
     setPage(1);
     console.log("FilterContracts: Filters cleared");
@@ -134,20 +138,20 @@ const FilterContracts = ({
             />
           </div>
         )}
-        {!disabledFilters.includes("idFilter") && (
+        {!disabledFilters.includes("contractIdFilter") && ( // Changed idFilter to contractIdFilter
           <div className="w-full sm:w-1/4">
-            <label htmlFor="idFilter" className="block text-lg sm:text-xl font-bold text-primary mb-2">
-              Filter by ID
+            <label htmlFor="contractIdFilter" className="block text-lg sm:text-xl font-bold text-primary mb-2">
+              Filter by Contract ID
             </label>
             <input
-              id="idFilter"
+              id="contractIdFilter"
               type="text"
               placeholder="Filter by contract ID..."
               className="border p-2 rounded w-full"
-              value={idFilter}
+              value={contractIdFilter}
               onChange={(e) => {
-                console.log("FilterContracts: ID filter changed:", e.target.value);
-                setIdFilter(e.target.value);
+                console.log("FilterContracts: Contract ID filter changed:", e.target.value);
+                setContractIdFilter(e.target.value);
                 setPage(1);
               }}
               aria-label="Filter by contract ID"
@@ -274,7 +278,7 @@ const FilterContracts = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
           {paginatedContracts.map((contract) => (
-            <ContractCard key={contract.id} contract={contract} />
+            <ContractCard key={contract.contract_id} contract={contract} /> // Changed id to contract_id
           ))}
         </div>
       )}

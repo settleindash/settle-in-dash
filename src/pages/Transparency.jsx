@@ -1,4 +1,7 @@
 // src/pages/Transparency.jsx
+// This component displays a table of contracts for transparency, with filtering capabilities,
+// using wallet address-based identification.
+
 import { Link } from "react-router-dom";
 import { useContracts } from "../hooks/useContracts";
 import FilterContracts from "../components/FilterContracts";
@@ -21,7 +24,7 @@ const Transparency = () => {
             <thead>
               <tr className="bg-gray-100 border-b">
                 <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
-                  ID
+                  Contract ID
                 </th>
                 <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
                   Created At
@@ -39,14 +42,14 @@ const Transparency = () => {
             </thead>
             <tbody>
               {paginatedContracts.map((contract) => (
-                <tr key={contract.id} className="border-b hover:bg-gray-50">
+                <tr key={contract.contract_id} className="border-b hover:bg-gray-50">
                   <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
                     <Link
-                      to={`/contract/${contract.id}`}
+                      to={`/contract/${contract.contract_id}`}
                       className="text-blue-500 hover:underline block min-h-[44px]"
-                      aria-label={`View details for contract ${contract.id}`}
+                      aria-label={`View details for contract ${contract.contract_id}`}
                     >
-                      {contract.id}
+                      {contract.contract_id}
                     </Link>
                   </td>
                   <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
@@ -93,7 +96,7 @@ const Transparency = () => {
         <FilterContracts
           contracts={contracts}
           statusFilter="All"
-          userEmail={null}
+          userWalletAddress={null} // Changed from userEmail to userWalletAddress
           onFilterChange={handleFilterChange}
           contractsPerPage={20}
           disabledFilters={[]}

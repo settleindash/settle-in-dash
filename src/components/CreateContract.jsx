@@ -1,6 +1,6 @@
 // src/components/CreateContract.jsx
 // This component allows users to create a new betting contract by filling out a form.
-// It collects question, event start time, stake, percentage, category, email, and acceptance deadline,
+// It collects question, event start time, stake, percentage, category, wallet address, and acceptance deadline,
 // and uses the useContracts hook to create the contract. Category list is imported
 // from a separate file for easy maintenance. Validates event start time as after present time
 // and acceptance deadline as before or on event start time.
@@ -9,6 +9,7 @@ import { useState } from "react"; // Import React's useState hook for managing f
 import { useNavigate } from "react-router-dom"; // Import useNavigate for redirecting after contract creation.
 import { useContracts } from "../hooks/useContracts"; // Custom hook for contract-related logic.
 import { categories } from "../utils/categories"; // Import category list from separate file.
+import TermsSummary from "./TermsSummary"; // Import TermsSummary component
 
 const CreateContract = () => {
   // State for form inputs, initialized as empty strings or defaults.
@@ -17,14 +18,14 @@ const CreateContract = () => {
   const [stake, setStake] = useState(""); // Stake amount in DASH.
   const [percentage, setPercentage] = useState(""); // Creator's percentage of the pot (0-100).
   const [category, setCategory] = useState(categories[0] || ""); // Default to first category or empty.
-  const [email, setEmail] = useState(""); // Creator's email, used as their identifier.
+  const [WalletAddress, setWalletAddress] = useState(""); // Creator's wallet address, used as their identifier.
   const [acceptanceDeadline, setAcceptanceDeadline] = useState(""); // Deadline for contract acceptance.
   const [error, setError] = useState(""); // State for error messages during validation.
 
   const { createContract } = useContracts(); // Get createContract function from useContracts hook.
   const navigate = useNavigate(); // Initialize navigate for redirecting to marketplace.
 
-  // Current date and time dynamically set to now (e.g., 2025-07-21T18:26:00+02:00).
+  // Current date and time dynamically set to now (e.g., 2025-07-24T20:24:00+02:00).
   const currentDateTime = new Date().toISOString();
   // Format for datetime-local input (YYYY-MM-DDThh:mm), adjusted for local timezone.
   const minDateTime = new Date().toLocaleString("sv-SE", {
@@ -36,12 +37,12 @@ const CreateContract = () => {
   }).replace(" ", "T");
 
   // Log form inputs for debugging (visible in browser Console, F12 in VSC).
-  console.log("CreateContract: Form state:", { question, time, stake, percentage, category, email, acceptanceDeadline });
+  console.log("CreateContract: Form state:", { question, time, stake, percentage, category, WalletAddress, acceptanceDeadline });
 
   // Handle form submission for creating a new contract.
   const handleSubmit = async (e) => {
     e.preventDefault(); // Prevent default form submission behavior (page reload).
-    console.log("CreateContract: Form submitted:", { question, time, stake, percentage, category, email, acceptanceDeadline });
+    console.log("CreateContract: Form submitted:", { question, time, stake, percentage, category, WalletAddress, acceptanceDeadline });
 
     // Debug date values
     console.log("Current DateTime:", new Date(currentDateTime));
@@ -87,11 +88,10 @@ const CreateContract = () => {
       return;
     }
 
-    // Validate email: must match a simple email format (e.g., name@domain.com).
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError("Please provide a valid email address");
-      console.log("CreateContract: Validation failed - invalid email");
+    // Validate wallet address: must not be empty.
+    if (!WalletAddress) {
+      setError("Please provide a wallet address");
+      console.log("CreateContract: Validation failed - no wallet address");
       return;
     }
 
@@ -129,7 +129,7 @@ const CreateContract = () => {
       Number(stake), // Convert stake to number.
       Number(percentage), // Convert percentage to number.
       category,
-      email,
+      WalletAddress,
       deadline.toISOString() // Convert acceptance deadline to ISO string.
     );
 
@@ -253,22 +253,22 @@ const CreateContract = () => {
             />
           </div>
 
-          {/* Creator Email */}
+          {/* Creator Wallet Address */}
           <div className="mb-6">
-            <label htmlFor="email" className="block text-lg sm:text-xl font-bold text-primary mb-2">
-              Creator Email
+            <label htmlFor="WalletAddress" className="block text-lg sm:text-xl font-bold text-primary mb-2">
+              Creator Wallet Address
             </label>
             <input
-              id="email"
-              type="email"
+              id="WalletAddress"
+              type="text"
               className="border p-2 rounded w-full"
-              value={email}
+              value={WalletAddress}
               onChange={(e) => {
-                console.log("CreateContract: Email changed:", e.target.value);
-                setEmail(e.target.value);
+                console.log("CreateContract: Wallet Address changed:", e.target.value);
+                setWalletAddress(e.target.value);
               }}
-              placeholder="Enter your email"
-              aria-label="Creator email"
+              placeholder="Enter your wallet address"
+              aria-label="Creator wallet address"
             />
           </div>
 
@@ -301,6 +301,7 @@ const CreateContract = () => {
             Create Contract
           </button>
         </form>
+        <TermsSummary /> {/* Added TermsSummary at the bottom */}
       </main>
     </div>
   );

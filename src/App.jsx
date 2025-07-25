@@ -2,7 +2,7 @@
 // Main app component with routing and conditional footers shown only on the home page.
 // Uses min-h-[100dvh] to ensure footers stay at the bottom with scrolling on home page.
 
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, NavLink } from "react-router-dom"; // Added NavLink
 import Header from "./components/Header";
 import Home from "./pages/Home";
 import Marketplace from "./pages/Marketplace";
@@ -11,7 +11,8 @@ import About from "./pages/About";
 import Support from "./pages/Support";
 import CreateContract from "./components/CreateContract";
 import Contract from "./pages/Contract";
-import Settle from "./pages/Settle"; // Import Settle component for new route
+import Settle from "./pages/Settle";
+import TermsAndConditions from "./pages/TermsAndConditions";
 
 // Main content component with routing and conditional footers
 const AppContent = () => {
@@ -40,8 +41,10 @@ const AppContent = () => {
           <Route path="/support" element={<Support />} />
           {/* Create contract page route */}
           <Route path="/create" element={<CreateContract />} />
-          {/* Dynamic contract page route with ID parameter */}
-          <Route path="/contract/:id" element={<Contract />} />
+          {/* Dynamic contract page route with contract_id parameter */}
+          <Route path="/contract/:contract_id" element={<Contract />} />
+          {/* Terms and Conditions page route */}
+          <Route path="/terms" element={<TermsAndConditions />} />
         </Routes>
       </main>
       {/* Conditionally render footers on home page */}
@@ -63,13 +66,13 @@ const AppContent = () => {
                 <div className="text-center">
                   <h3 className="text-sm sm:text-base font-semibold text-primary">Anonymous</h3>
                   <p className="text-gray-600 text-sm sm:text-base">
-                    Interact using only your DASH wallet address (in test mode email address).
+                    Interact using only your DASH wallet address.
                   </p>
                 </div>
                 <div className="text-center">
-                  <h3 className="text-sm sm:text-base font-semibold text-primary">Transparent</h3>
+                  <h3 className="text-sm sm:text-base font-semibold text-primary">Peer to Peer</h3>
                   <p className="text-gray-600 text-sm sm:text-base">
-                    All Twist resolutions publicly verifiable on IPFS.
+                    Create or accept contracts like a wager with a friend
                   </p>
                 </div>
               </div>
@@ -78,9 +81,19 @@ const AppContent = () => {
           {/* Lower footer: Contact and social links */}
           <footer className="bg-primary text-white py-4 sm:py-6">
             <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4">
-              <p className="font-inter text-sm sm:text-base">Settle In DASH</p>
+              <NavLink
+                to="/terms"
+                className="font-inter text-sm sm:text-base hover:underline"
+                aria-label="Terms and Conditions"
+              >
+                Terms and Conditions
+              </NavLink>
               <p className="font-inter text-sm sm:text-base">Contact: hello@SettleInDASH.com</p>
-              <a href="https://x.com/SettleInDASH" className="font-inter text-sm sm:text-base hover:underline">
+              <a
+                href="https://x.com/SettleInDASH"
+                className="font-inter text-sm sm:text-base hover:underline"
+                aria-label="Follow Settle In DASH on X"
+              >
                 Follow On X
               </a>
             </div>

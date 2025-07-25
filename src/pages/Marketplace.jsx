@@ -1,4 +1,7 @@
 // src/pages/Marketplace.jsx
+// This component displays the marketplace with a list of open contracts,
+// using FilterContracts component for filtering, with wallet address-based identification.
+
 import { useContracts } from "../hooks/useContracts";
 import FilterContracts from "../components/FilterContracts";
 
@@ -32,7 +35,7 @@ const Marketplace = () => {
         <FilterContracts
           contracts={contracts}
           statusFilter="open" // Restrict to open contracts
-          userEmail={null} // No user-specific filtering
+          userWalletAddress={null} // No user-specific filtering
           onFilterChange={handleFilterChange}
           contractsPerPage={20} // Match original pagination
           disabledFilters={["statusFilter"]} // Disable status filter

@@ -1,3 +1,7 @@
+// src/hooks/useContracts.js
+// Custom hook for managing contract-related logic, including fetching, creating, accepting, settling, and resolving contracts,
+// using wallet address-based identification.
+
 import { useState, useEffect } from "react";
 
 export const useContracts = () => {
@@ -25,12 +29,12 @@ export const useContracts = () => {
   }, []);
 
   // Create contract
-  const createContract = async (question, time, stake, percentage, category, email, acceptanceDeadline) => {
+  const createContract = async (question, time, stake, percentage, category, WalletAddress, acceptanceDeadline) => {
     try {
       const response = await fetch("https://settleindash.com/api/contracts.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, time, stake, percentage, category, email, acceptanceDeadline }),
+        body: JSON.stringify({ question, time, stake, percentage, category, WalletAddress, acceptanceDeadline }), // Changed email to WalletAddress
       });
       return await response.json();
     } catch (err) {
@@ -39,12 +43,12 @@ export const useContracts = () => {
   };
 
   // Accept contract
-  const acceptContract = async (id, accepterEmail) => {
+  const acceptContract = async (contract_id, accepterWalletAddress) => { // Changed id to contract_id, accepterEmail to accepterWalletAddress
     try {
       const response = await fetch("https://settleindash.com/api/contracts.php", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "accept", id, accepterEmail }),
+        body: JSON.stringify({ action: "accept", contract_id, accepterWalletAddress }), // Changed id to contract_id, accepterEmail to accepterWalletAddress
       });
       return await response.json();
     } catch (err) {
@@ -53,17 +57,17 @@ export const useContracts = () => {
   };
 
   // Settle contract (submit winner choice)
-  const settleContract = async (id, submitterEmail, winnerEmail, reasoning) => {
+  const settleContract = async (contract_id, submitterWalletAddress, winnerWalletAddress, reasoning) => { // Changed id to contract_id, submitterEmail to submitterWalletAddress, winnerEmail to winnerWalletAddress
     try {
       const response = await fetch("https://settleindash.com/api/contracts.php", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "settle", id, submitterEmail, winnerEmail, reasoning }),
+        body: JSON.stringify({ action: "settle", contract_id, submitterWalletAddress, winnerWalletAddress, reasoning }), // Changed id to contract_id, submitterEmail to submitterWalletAddress, winnerEmail to winnerWalletAddress
       });
       const result = await response.json();
       if (result.success) {
         setContracts((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, ...result.contract } : c))
+          prev.map((c) => (c.contract_id === contract_id ? { ...c, ...result.contract } : c)) // Changed id to contract_id
         );
       }
       return result;
@@ -73,17 +77,17 @@ export const useContracts = () => {
   };
 
   // Resolve twist (via Grok API)
-  const triggerTwist = async (id) => {
+  const triggerTwist = async (contract_id) => { // Changed id to contract_id
     try {
       const response = await fetch("https://settleindash.com/api/contracts.php", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "resolve_twist", id }),
+        body: JSON.stringify({ action: "resolve_twist", contract_id }), // Changed id to contract_id
       });
       const result = await response.json();
       if (result.success) {
         setContracts((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, ...result.contract } : c))
+          prev.map((c) => (c.contract_id === contract_id ? { ...c, ...result.contract } : c)) // Changed id to contract_id
         );
       }
       return result;
