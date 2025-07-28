@@ -72,7 +72,7 @@ const AppContent = () => {
                 <div className="text-center">
                   <h3 className="text-sm sm:text-base font-semibold text-primary">Peer to Peer</h3>
                   <p className="text-gray-600 text-sm sm:text-base">
-                    Create or accept contracts like a wager with a friend
+                    Create or accept contracts, like making a wager with a friend.
                   </p>
                 </div>
               </div>

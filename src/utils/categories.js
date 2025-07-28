@@ -2,7 +2,11 @@
 // List of available contract categories for easy maintenance.
 
 export const categories = [
-  "Crypto",
+  "Politics",
+  "Elections",
+  "Weather",
+  "Commodities",
   "Sports",
+  "Crypto",
   "Other",
 ];

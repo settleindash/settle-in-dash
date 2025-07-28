@@ -68,7 +68,7 @@ const Settle = () => {
       setSelectedContractId(null);
       alert(result.message);
     } else {
-           alert(`Error: ${result.error}`);
+      alert(`Error: ${result.error}`);
     }
   };
 
@@ -137,7 +137,7 @@ const Settle = () => {
                   <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
                     <Link
                       to={`/contract/${contract.contract_id}`}
-                      className="text-blue-500 hover:underline block min-h-[44px]"
+                      className="text-blue-500 hover:underline flex items-center min-h-[44px]"
                       aria-label={`View details for contract ${contract.contract_id}`}
                     >
                       {contract.contract_id}
@@ -263,7 +263,7 @@ const Settle = () => {
                   </option>
                   <option value="tie">Tie</option>
                 </select>
-              </div>
+                </div>
               <div>
                 <label htmlFor="reasoning" className="block text-base sm:text-lg font-bold text-primary mb-2">
                   Reasoning (Optional)

@@ -46,7 +46,7 @@ const Transparency = () => {
                   <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
                     <Link
                       to={`/contract/${contract.contract_id}`}
-                      className="text-blue-500 hover:underline block min-h-[44px]"
+                      className="text-blue-500 hover:underline flex items-center min-h-[44px]"
                       aria-label={`View details for contract ${contract.contract_id}`}
                     >
                       {contract.contract_id}
@@ -83,8 +83,8 @@ const Transparency = () => {
         <header className="bg-primary text-white p-4">
           <h1 className="text-xl sm:text-2xl font-semibold">Transparency</h1>
         </header>
-        <main className="max-w-7xl mx-auto p-1 sm:p-6 mt-6">
-          <p className="text-red-500 text-xs sm:text-base">Error: {apiError}</p>
+        <main className="max-w-xl mx-auto p-1 sm:p-6 mt-6">
+          <p className="text-red-500 text-xs sm:text-sm">Error: {apiError}</p>
         </main>
       </div>
     );
@@ -96,7 +96,7 @@ const Transparency = () => {
         <FilterContracts
           contracts={contracts}
           statusFilter="All"
-          userWalletAddress={null} // Changed from userEmail to userWalletAddress
+          userWalletAddress=""
           onFilterChange={handleFilterChange}
           contractsPerPage={20}
           disabledFilters={[]}

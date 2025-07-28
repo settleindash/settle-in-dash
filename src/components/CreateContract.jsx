@@ -5,29 +5,26 @@
 // from a separate file for easy maintenance. Validates event start time as after present time
 // and acceptance deadline as before or on event start time.
 
-import { useState } from "react"; // Import React's useState hook for managing form state.
-import { useNavigate } from "react-router-dom"; // Import useNavigate for redirecting after contract creation.
-import { useContracts } from "../hooks/useContracts"; // Custom hook for contract-related logic.
-import { categories } from "../utils/categories"; // Import category list from separate file.
-import TermsSummary from "./TermsSummary"; // Import TermsSummary component
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useContracts } from "../hooks/useContracts";
+import { categories } from "../utils/categories";
+import TermsSummary from "./TermsSummary";
 
 const CreateContract = () => {
-  // State for form inputs, initialized as empty strings or defaults.
-  const [question, setQuestion] = useState(""); // Contract question (e.g., "Will it rain today?").
-  const [time, setTime] = useState(""); // Event start date and time.
-  const [stake, setStake] = useState(""); // Stake amount in DASH.
-  const [percentage, setPercentage] = useState(""); // Creator's percentage of the pot (0-100).
-  const [category, setCategory] = useState(categories[0] || ""); // Default to first category or empty.
-  const [WalletAddress, setWalletAddress] = useState(""); // Creator's wallet address, used as their identifier.
-  const [acceptanceDeadline, setAcceptanceDeadline] = useState(""); // Deadline for contract acceptance.
-  const [error, setError] = useState(""); // State for error messages during validation.
+  const [question, setQuestion] = useState("");
+  const [time, setTime] = useState("");
+  const [stake, setStake] = useState("");
+  const [percentage, setPercentage] = useState("");
+  const [category, setCategory] = useState(categories[0] || "");
+  const [WalletAddress, setWalletAddress] = useState("");
+  const [acceptanceDeadline, setAcceptanceDeadline] = useState("");
+  const [error, setError] = useState("");
 
-  const { createContract } = useContracts(); // Get createContract function from useContracts hook.
-  const navigate = useNavigate(); // Initialize navigate for redirecting to marketplace.
+  const { createContract } = useContracts();
+  const navigate = useNavigate();
 
-  // Current date and time dynamically set to now (e.g., 2025-07-24T20:24:00+02:00).
   const currentDateTime = new Date().toISOString();
-  // Format for datetime-local input (YYYY-MM-DDThh:mm), adjusted for local timezone.
   const minDateTime = new Date().toLocaleString("sv-SE", {
     year: "numeric",
     month: "2-digit",
@@ -36,27 +33,34 @@ const CreateContract = () => {
     minute: "2-digit",
   }).replace(" ", "T");
 
-  // Log form inputs for debugging (visible in browser Console, F12 in VSC).
+  const validBase58Chars = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/;
+
+  const validateWalletAddress = (address) => {
+    if (!address) return false;
+    if (address.length !== 34) return false;
+    if (!address.startsWith("X")) return false;
+    return validBase58Chars.test(address);
+  };
+
   console.log("CreateContract: Form state:", { question, time, stake, percentage, category, WalletAddress, acceptanceDeadline });
 
-  // Handle form submission for creating a new contract.
+  // Calculate Accepter's Percentage for display
+  const accepterPercentage = percentage ? (100 - parseFloat(percentage)).toFixed(2) : "0.00";
+
   const handleSubmit = async (e) => {
-    e.preventDefault(); // Prevent default form submission behavior (page reload).
+    e.preventDefault();
     console.log("CreateContract: Form submitted:", { question, time, stake, percentage, category, WalletAddress, acceptanceDeadline });
 
-    // Debug date values
     console.log("Current DateTime:", new Date(currentDateTime));
     console.log("Event Start Time:", time, new Date(time ? `${time}:00+02:00` : currentDateTime));
     console.log("Acceptance Deadline:", acceptanceDeadline, new Date(acceptanceDeadline ? `${acceptanceDeadline}:00+02:00` : currentDateTime));
 
-    // Validate question: must end with a question mark.
     if (!question.endsWith("?")) {
       setError("Question must end with a '?'");
       console.log("CreateContract: Validation failed - no question mark");
       return;
     }
 
-    // Validate event start time: must be provided and after current time.
     if (!time) {
       setError("Event Start Time is required");
       console.log("CreateContract: Validation failed - no event time");
@@ -68,34 +72,32 @@ const CreateContract = () => {
       console.log("CreateContract: Validation failed - invalid event time");
       return;
     }
-    if (eventTime <= new Date(currentDateTime)) {
-      setError("Event Start Time must be after the present time");
-      console.log("CreateContract: Validation failed - event time in past or present");
+    const roundedCurrentTime = new Date(currentDateTime);
+    const bufferTime = new Date(roundedCurrentTime.getTime() - 5 * 60 * 1000);
+    if (eventTime <= bufferTime) {
+      setError("Event Start Time must be in the future (at least 5 minutes from now)");
+      console.log("CreateContract: Validation failed - event time too far in past");
       return;
     }
 
-    // Validate stake: must be a number and at least 1 DASH.
     if (isNaN(stake) || Number(stake) < 1) {
       setError("Stake must be at least 1 DASH");
       console.log("CreateContract: Validation failed - invalid stake");
       return;
     }
 
-    // Validate percentage: must be a number between 0 and 100.
     if (isNaN(percentage) || Number(percentage) < 0 || Number(percentage) > 100) {
       setError("Percentage must be a number between 0 and 100");
       console.log("CreateContract: Validation failed - invalid percentage");
       return;
     }
 
-    // Validate wallet address: must not be empty.
-    if (!WalletAddress) {
-      setError("Please provide a wallet address");
-      console.log("CreateContract: Validation failed - no wallet address");
+    if (!validateWalletAddress(WalletAddress)) {
+      setError("Please provide a valid DASH wallet address (34 characters, starts with 'X')");
+      console.log("CreateContract: Validation failed - invalid wallet address");
       return;
     }
 
-    // Validate acceptance deadline: must be provided, after current time, and before or on event start time.
     if (!acceptanceDeadline) {
       setError("Acceptance deadline is required");
       console.log("CreateContract: Validation failed - no acceptance deadline");
@@ -112,30 +114,27 @@ const CreateContract = () => {
       console.log("CreateContract: Validation failed - acceptance deadline after event time");
       return;
     }
-    if (deadline <= new Date(currentDateTime)) {
-      setError("Acceptance deadline must be after the current time");
-      console.log("CreateContract: Validation failed - acceptance deadline in past");
+    if (deadline <= bufferTime) {
+      setError("Acceptance deadline must be in the future (at least 5 minutes from now)");
+      console.log("CreateContract: Validation failed - acceptance deadline too far in past");
       return;
     }
 
-    // Clear any existing error messages.
     setError("");
     console.log("CreateContract: Calling createContract");
 
-    // Attempt to create contract with provided details.
     const result = await createContract(
       question,
-      eventTime.toISOString(), // Convert time to ISO string for consistency.
-      Number(stake), // Convert stake to number.
-      Number(percentage), // Convert percentage to number.
+      eventTime.toISOString(),
+      Number(stake),
+      Number(percentage),
       category,
       WalletAddress,
-      deadline.toISOString() // Convert acceptance deadline to ISO string.
+      deadline.toISOString()
     );
 
-    // Handle result of contract creation.
     if (result.error) {
-      setError(result.error); // Display error if contract creation fails.
+      setError(result.error);
       console.log("CreateContract: createContract failed:", result.error);
     } else {
       console.log("CreateContract: Contract created, navigating to /marketplace");
@@ -143,11 +142,28 @@ const CreateContract = () => {
     }
   };
 
+  const handleTimeChange = (e) => {
+    const selectedTime = e.target.value;
+    console.log("CreateContract: Event Start Time changed:", selectedTime);
+    const eventTime = new Date(`${selectedTime}:00+02:00`);
+    const roundedCurrentTime = new Date();
+    const bufferTime = new Date(roundedCurrentTime.getTime() - 5 * 60 * 1000);
+    if (eventTime <= bufferTime) {
+      setError("Event Start Time must be in the future (at least 5 minutes from now)");
+      setTime("");
+    } else {
+      setError("");
+      setTime(selectedTime);
+      if (acceptanceDeadline && new Date(`${acceptanceDeadline}:00+02:00`) > new Date(`${selectedTime}:00+02:00`)) {
+        setAcceptanceDeadline("");
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background p-4">
       <main className="max-w-3xl mx-auto mt-6">
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-6">
-          {/* Category at the top with dynamic options */}
           <div className="mb-6">
             <label htmlFor="category" className="block text-lg sm:text-xl font-bold text-primary mb-2">
               Category
@@ -170,7 +186,6 @@ const CreateContract = () => {
             </select>
           </div>
 
-          {/* Question */}
           <div className="mb-6">
             <label htmlFor="question" className="block text-lg sm:text-xl font-bold text-primary mb-2">
               Question
@@ -189,7 +204,6 @@ const CreateContract = () => {
             />
           </div>
 
-          {/* Event Start Time */}
           <div className="mb-6">
             <label htmlFor="time" className="block text-lg sm:text-xl font-bold text-primary mb-2">
               Event Start Time
@@ -199,20 +213,16 @@ const CreateContract = () => {
               type="datetime-local"
               className="border p-2 rounded w-full"
               value={time}
-              min={minDateTime} // Prevent selecting past dates
-              onChange={(e) => {
-                console.log("CreateContract: Event Start Time changed:", e.target.value);
-                setTime(e.target.value);
-                // Reset acceptance deadline if event time changes to ensure valid selection
-                if (acceptanceDeadline && new Date(`${acceptanceDeadline}:00+02:00`) > new Date(`${e.target.value}:00+02:00`)) {
-                  setAcceptanceDeadline("");
-                }
-              }}
+              min={minDateTime}
+              onChange={handleTimeChange}
               aria-label="Event start time"
+              lang="en"
             />
+            <p className="text-gray-600 text-xs mt-1">
+              Select a future date and time (at least 5 minutes from now; display may vary based on device language).
+            </p>
           </div>
 
-          {/* Stake */}
           <div className="mb-6">
             <label htmlFor="stake" className="block text-lg sm:text-xl font-bold text-primary mb-2">
               Stake (DASH)
@@ -222,7 +232,7 @@ const CreateContract = () => {
               type="number"
               className="border p-2 rounded w-full"
               value={stake}
-              min="1" // Enforce minimum stake
+              min="1"
               onChange={(e) => {
                 console.log("CreateContract: Stake changed:", e.target.value);
                 setStake(e.target.value);
@@ -232,7 +242,6 @@ const CreateContract = () => {
             />
           </div>
 
-          {/* Creator's Percentage */}
           <div className="mb-6">
             <label htmlFor="percentage" className="block text-lg sm:text-xl font-bold text-primary mb-2">
               Creator's Percentage (0-100)
@@ -242,7 +251,7 @@ const CreateContract = () => {
               type="number"
               className="border p-2 rounded w-full"
               value={percentage}
-              min="0" // Enforce valid range
+              min="0"
               max="100"
               onChange={(e) => {
                 console.log("CreateContract: Percentage changed:", e.target.value);
@@ -251,9 +260,11 @@ const CreateContract = () => {
               placeholder="Enter percentage (0-100)"
               aria-label="Creator's percentage"
             />
+            <p className="text-gray-600 text-xs mt-1">
+              Creator’s payout ratio: {accepterPercentage}
+            </p>
           </div>
 
-          {/* Creator Wallet Address */}
           <div className="mb-6">
             <label htmlFor="WalletAddress" className="block text-lg sm:text-xl font-bold text-primary mb-2">
               Creator Wallet Address
@@ -267,12 +278,11 @@ const CreateContract = () => {
                 console.log("CreateContract: Wallet Address changed:", e.target.value);
                 setWalletAddress(e.target.value);
               }}
-              placeholder="Enter your wallet address"
+              placeholder="Enter a valid DASH address (starts with 'X', 34 characters)"
               aria-label="Creator wallet address"
             />
           </div>
 
-          {/* Acceptance Deadline */}
           <div className="mb-6">
             <label htmlFor="acceptanceDeadline" className="block text-lg sm:text-xl font-bold text-primary mb-2">
               Acceptance Deadline
@@ -282,14 +292,18 @@ const CreateContract = () => {
               type="datetime-local"
               className="border p-2 rounded w-full"
               value={acceptanceDeadline}
-              min={minDateTime} // Prevent selecting before current time
-              max={time || undefined} // Prevent selecting after event time
+              min={minDateTime}
+              max={time || undefined}
               onChange={(e) => {
                 console.log("CreateContract: Acceptance deadline changed:", e.target.value);
                 setAcceptanceDeadline(e.target.value);
               }}
               aria-label="Acceptance deadline"
+              lang="en"
             />
+            <p className="text-gray-600 text-xs mt-1">
+              Select a date and time before or on the Event Start Time (at least 5 minutes from now; display may vary based on device language).
+            </p>
           </div>
 
           {error && <p className="text-red-500">{error}</p>}
@@ -301,7 +315,7 @@ const CreateContract = () => {
             Create Contract
           </button>
         </form>
-        <TermsSummary /> {/* Added TermsSummary at the bottom */}
+        <TermsSummary />
       </main>
     </div>
   );

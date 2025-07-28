@@ -71,7 +71,29 @@ const TermsAndConditions = () => (
         DASH’s low transaction fees ($0.0002-$0.001) minimize additional costs.
       </p>
 
-      <h3 className="text-xl font-medium text-blue-800 mb-2">7. User Responsibilities</h3>
+
+        <h3 className="text-xl font-medium text-blue-800 mb-2">7. How Contracts Are Paid</h3>
+        <p className="text-gray-600 text-sm mb-4">
+        When you create or accept a contract on Settle In DASH, the payout depends on the stake and the Creator’s Percentage, which determines how the total stake is split between the Creator and Accepter before any platform fees.
+        <ul className="list-disc list-inside space-y-1">
+            <li>
+            <strong>Creator’s Percentage</strong>: This is the portion of the stake (in DASH) that the Creator wins if they are correct, or the Accepter pays if the Creator wins. The Accepter’s payout is the remaining portion (100% minus the Creator’s Percentage).
+            </li>
+            <li>
+            <strong>Example</strong>: For a stake of 10 DASH with a Creator’s Percentage of 25%:
+            <ul className="list-disc list-inside space-y-1 ml-4">
+                <li>If the Creator wins, they receive 2.5 DASH (25% of 10), and the Accepter pays 2.5 DASH.</li>
+                <li>If the Accepter wins, they receive 7.5 DASH (75%, the remaining portion), and the Creator pays 7.5 DASH.</li>
+            </ul>
+            </li>
+            <li>
+            <strong>Before Fees</strong>: These amounts are calculated before any applicable platform fees, which may reduce the final payout. Fees, if any, will be clearly displayed during contract creation or settlement.
+            </li>
+        </ul>
+        </p>
+
+
+      <h3 className="text-xl font-medium text-blue-800 mb-2">8. User Responsibilities</h3>
       <p className="text-gray-600 text-sm mb-4">
         By using Settle In DASH, you agree to:
         <ul className="list-disc list-inside space-y-1">
@@ -83,7 +105,7 @@ const TermsAndConditions = () => (
         Settle In DASH is a decentralized platform and does not custody user funds or require personal information.
       </p>
 
-      <h3 className="text-xl font-medium text-blue-800 mb-2">8. Disclaimers</h3>
+      <h3 className="text-xl font-medium text-blue-800 mb-2">9. Disclaimers</h3>
       <p className="text-gray-600 text-sm mb-4">
         Settle In DASH is not responsible for:
         <ul className="list-disc list-inside space-y-1">
@@ -94,7 +116,7 @@ const TermsAndConditions = () => (
         The platform is provided “as is” without warranties. Users assume all risks associated with decentralized applications.
       </p>
 
-      <h3 className="text-xl font-medium text-blue-800 mb-2">9. Contact</h3>
+      <h3 className="text-xl font-medium text-blue-800 mb-2">10. Contact</h3>
       <p className="text-gray-600 text-sm mb-6">
         For questions or support, contact us at{" "}
         <a

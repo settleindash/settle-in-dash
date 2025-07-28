@@ -7,26 +7,46 @@ import { useState, useEffect } from "react";
 import { useContracts } from "../hooks/useContracts";
 
 const Contract = () => {
-  const { contract_id } = useParams(); // Changed from id to contract_id
+  const { contract_id } = useParams();
   const { contracts, acceptContract, error: apiError, loading } = useContracts();
-  const [localContract, setLocalContract] = useState(null); // Local state for contract
-  const [accepterWalletAddress, setAccepterWalletAddress] = useState(""); // Changed from accepterEmail to accepterWalletAddress
+  const [localContract, setLocalContract] = useState(null);
+  const [accepterWalletAddress, setAccepterWalletAddress] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const navigate = useNavigate();
 
   // Find contract from contracts array or use localContract
-  const contract = localContract || contracts.find((c) => c.contract_id === contract_id); // Changed id to contract_id
+  const contract = localContract || contracts.find((c) => c.contract_id === contract_id);
 
   console.log("Contract: Contract data for contract_id", contract_id, ":", contract);
 
   // Sync localContract with contracts on mount or when contract_id changes
   useEffect(() => {
-    const foundContract = contracts.find((c) => c.contract_id === contract_id); // Changed id to contract_id
+    const foundContract = contracts.find((c) => c.contract_id === contract_id);
     if (foundContract) {
       setLocalContract(foundContract);
     }
-  }, [contracts, contract_id]); // Changed id to contract_id
+  }, [contracts, contract_id]);
+
+  // Format status for display (reused from ContractCard.jsx)
+  const formatStatus = (status) => {
+    const statusMap = {
+      open: "Open for Acceptance",
+      accepted: "Accepted",
+      cancelled: "Cancelled",
+      settled: "Settled",
+      twist: "Twist Resolved",
+    };
+    return statusMap[status] || status;
+  };
+
+  // Format date as YYYY-MM-DD (reused from ContractCard.jsx)
+  const formatDate = (dateString) => {
+    return dateString ? new Date(dateString).toISOString().split("T")[0] : "Not set";
+  };
+
+  // Calculate Accepter's Percentage
+  const accepterPercentage = contract ? (100 - parseFloat(contract.percentage)).toFixed(2) : "0.00";
 
   if (loading) {
     return <div className="min-h-screen bg-background p-4">Loading contract...</div>;
@@ -50,7 +70,7 @@ const Contract = () => {
   }
 
   const handleAcceptContract = async () => {
-    if (!accepterWalletAddress) { // Changed from emailRegex to non-empty check
+    if (!accepterWalletAddress) {
       setError("Please provide a wallet address");
       console.log("Contract: Validation failed - no accepter wallet address");
       return;
@@ -67,16 +87,15 @@ const Contract = () => {
     console.log("Contract: Accepting contract with contract_id", contract_id, "and wallet address", accepterWalletAddress);
 
     try {
-      const result = await acceptContract(contract_id, accepterWalletAddress); // Changed id to contract_id
+      const result = await acceptContract(contract_id, accepterWalletAddress);
       if (result.success) {
-        // Update local state to reflect accepted status
         setLocalContract({
           ...contract,
           status: "accepted",
-          accepterWalletAddress, // Changed from accepterEmail
+          accepterWalletAddress,
         });
         setMessage("Contract accepted successfully!");
-        navigate(`/contract/${contract_id}`); // Changed id to contract_id
+        navigate(`/contract/${contract_id}`);
       } else {
         setError(result.error || "Failed to accept contract");
         console.error("Contract: API error accepting contract", result.error);
@@ -90,31 +109,31 @@ const Contract = () => {
   return (
     <div className="min-h-screen bg-background p-4">
       <main className="max-w-3xl mx-auto mt-6">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold">{contract.question}</h2>
-          <p className="text-gray-600">Contract ID: {contract.contract_id}</p> {/* Changed ID to Contract ID and id to contract_id */}
+        <div className="bg-white p-6 rounded-lg shadow text-sm">
+          <h2 className="text-base font-semibold">{contract.question}</h2>
+          <p className="text-gray-600">Category: {contract.category}</p>
+          <p className="text-gray-600">Stake: {contract.stake} DASH</p>
+          <p className="text-gray-600">Creator's Percentage: {contract.percentage}%</p>
+          <p className="text-gray-600">Creator’s payout ratio: {accepterPercentage}%</p>
+          <p className="text-gray-600">Accepter’s Percentage: {accepterPercentage}%</p>
+          <p className="text-gray-600">Contract ID: {contract.contract_id}</p>
+          <p className="text-gray-600">Created by: {contract.WalletAddress}</p>
           <p className="text-gray-600">
             Created At: {contract.created_at ? new Date(contract.created_at).toLocaleString() : "Not set"}
           </p>
-          <p className="text-gray-600">Category: {contract.category}</p>
           <p className="text-gray-600">Event Time: {new Date(contract.time).toLocaleString()}</p>
-          <p className="text-gray-600">Stake: {contract.stake} DASH</p>
-          <p className="text-gray-600">Creator's Percentage: {contract.percentage}%</p>
-          <p className="text-gray-600">Creator Wallet Address: {contract.WalletAddress}</p> {/* Changed email to WalletAddress */}
-          <p className="text-gray-600">Status: {contract.status}</p>
-          <p className="text-gray-600">
-            Acceptance Deadline: {new Date(contract.acceptanceDeadline).toLocaleDateString()}
-          </p>
-          {contract.accepterWalletAddress && ( // Changed accepterEmail to accepterWalletAddress
+          <p className="text-gray-600">Acceptance Deadline: {formatDate(contract.acceptanceDeadline)}</p>
+          <p className="text-gray-600">Status: {formatStatus(contract.status)}</p>
+          {contract.accepterWalletAddress && (
             <p className="text-gray-600">Accepter Wallet Address: {contract.accepterWalletAddress}</p>
           )}
           {contract.status === "cancelled" && (
-            <p className="text-yellow-500">
+            <p className="text-yellow-500 mt-2">
               This contract was cancelled because the creator and accepter wallet addresses were identical.
             </p>
           )}
           {contract.status === "accepted" && (
-            <p className="text-green-500">This contract has been accepted.</p>
+            <p className="text-green-500 mt-2">This contract has been accepted.</p>
           )}
           {contract.status === "open" && (
             <div className="mt-4 space-y-2">
@@ -127,7 +146,7 @@ const Contract = () => {
                 </label>
                 <input
                   id="accepterWalletAddress"
-                  type="text" // Changed from email to text
+                  type="text"
                   className="border p-2 rounded w-full"
                   value={accepterWalletAddress}
                   onChange={(e) => {
