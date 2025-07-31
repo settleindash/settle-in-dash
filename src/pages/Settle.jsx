@@ -1,39 +1,79 @@
 // src/pages/Settle.jsx
-// Component for settling accepted contracts or resolving twists, using wallet address-based identification.
-// Filters contracts by user wallet address to show only relevant accepted or twist contracts.
+// Component for settling contracts or resolving twists, filtering by user wallet address.
 
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useContracts } from "../hooks/useContracts";
+import { useEvents } from "../hooks/useEvents";
 
 const Settle = () => {
-  const { contracts, settleContract, triggerTwist, loading, error: apiError } = useContracts();
+  const { contracts, fetchContracts, settleContract, triggerTwist, loading, error: apiError } = useContracts();
+  const { events, getEvents } = useEvents();
   const [userWalletAddress, setUserWalletAddress] = useState("");
   const [submitterWalletAddress, setSubmitterWalletAddress] = useState("");
-  const [winnerChoice, setWinnerChoice] = useState("");
+  const [winnerWalletAddress, setWinnerWalletAddress] = useState("");
   const [reasoning, setReasoning] = useState("");
   const [selectedContractId, setSelectedContractId] = useState(null);
+  const [error, setError] = useState("");
 
-  // Filter contracts by wallet address and status (accepted or twist)
-  const filteredContracts = useMemo(() => {
-    if (!userWalletAddress) {
-      return []; // Return empty array if no wallet address is provided
+  const validBase58Chars = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/;
+
+  const validateWalletAddress = (address) => {
+    if (!address) {
+      console.log("Settle: validateWalletAddress - Address is empty");
+      return false;
     }
-    return contracts.filter(
-      (c) =>
-        (c.status === "accepted" || c.status === "twist") &&
-        (c.WalletAddress === userWalletAddress || c.accepterWalletAddress === userWalletAddress)
-    );
-  }, [contracts, userWalletAddress]);
+    if (address.length !== 34) {
+      console.log(`Settle: validateWalletAddress - Invalid length: ${address.length}`);
+      return false;
+    }
+    if (!address.startsWith("X")) {
+      console.log("Settle: validateWalletAddress - Does not start with 'X'");
+      return false;
+    }
+    if (!validBase58Chars.test(address)) {
+      console.log(`Settle: validateWalletAddress - Invalid characters in: ${address}`);
+      return false;
+    }
+    console.log(`Settle: validateWalletAddress - Valid address: ${address}`);
+    return true;
+  };
 
-  // Split filtered contracts into accepted and twist
-  const acceptedContracts = filteredContracts.filter((c) => c.status === "accepted");
-  const twistContracts = filteredContracts.filter((c) => c.status === "twist");
-
-  // Debug render frequency
+  // Fetch all contracts and events on mount
   useEffect(() => {
-    console.log("Settle: Component rendered");
-  }, []);
+    console.log("Settle: Fetching all contracts and events");
+    fetchContracts({});
+    getEvents({ status: "open" });
+  }, [fetchContracts, getEvents]);
+
+  // Map contracts to include eventTitle
+  const filteredContracts = useMemo(() => {
+    console.log("Settle: Filtering contracts, userWalletAddress:", userWalletAddress);
+    if (!userWalletAddress || !validateWalletAddress(userWalletAddress)) {
+      console.log("Settle: No valid wallet address provided, returning empty array");
+      return [];
+    }
+    const filtered = contracts
+      .filter(
+        (c) =>
+          c.WalletAddress === userWalletAddress || c.accepterWalletAddress === userWalletAddress
+      )
+      .map((contract) => {
+        const event = events.find((e) => e.event_id === contract.event_id);
+        return {
+          ...contract,
+          eventTitle: event ? event.title : "Not set",
+        };
+      });
+    console.log("Settle: Filtered contracts with event titles:", filtered);
+    return filtered;
+  }, [contracts, events, userWalletAddress]);
+
+  // Debug contracts data
+  useEffect(() => {
+    console.log("Settle: Raw contracts from useContracts:", contracts);
+    console.log("Settle: Filtered contracts with event titles:", filteredContracts);
+  }, [contracts, filteredContracts]);
 
   // Format status for display
   const formatStatus = (status) => {
@@ -51,24 +91,62 @@ const Settle = () => {
   const handleSettle = async (e) => {
     e.preventDefault();
     console.log("Settle: Submitting settlement for contract_id:", selectedContractId);
-    if (!selectedContractId || !submitterWalletAddress || !winnerChoice) {
-      alert("Please select a contract, enter your wallet address, and choose a winner or tie.");
+    setError("");
+
+    if (!selectedContractId) {
+      setError("Please select a contract.");
+      console.log("Settle: Validation failed - no contract selected");
       return;
     }
-    const contract = acceptedContracts.find((c) => c.contract_id === selectedContractId);
+    if (!validateWalletAddress(submitterWalletAddress)) {
+      setError("Please provide a valid DASH wallet address (34 characters, starts with 'X').");
+      console.log("Settle: Validation failed - invalid submitter wallet address");
+      return;
+    }
+    if (!winnerWalletAddress) {
+      setError("Please select a winner or tie.");
+      console.log("Settle: Validation failed - no winner choice");
+      return;
+    }
+    if (!reasoning) {
+      setError("Please provide reasoning for your choice.");
+      console.log("Settle: Validation failed - no reasoning");
+      return;
+    }
+    if (reasoning.length > 1000) {
+      setError("Reasoning must be less than 1000 characters.");
+      console.log("Settle: Validation failed - reasoning too long");
+      return;
+    }
+
+    const contract = filteredContracts.find((c) => c.contract_id === selectedContractId);
     if (!contract) {
-      alert("Selected contract not found.");
+      setError("Selected contract not found.");
+      console.log("Settle: Validation failed - contract not found");
       return;
     }
-    const result = await settleContract(selectedContractId, submitterWalletAddress, winnerChoice, reasoning);
+    if (submitterWalletAddress !== contract.WalletAddress && submitterWalletAddress !== contract.accepterWalletAddress) {
+      setError("Unauthorized: You must be the creator or accepter.");
+      console.log("Settle: Validation failed - unauthorized submitter");
+      return;
+    }
+    if (winnerWalletAddress !== "tie" && winnerWalletAddress !== contract.WalletAddress && winnerWalletAddress !== contract.accepterWalletAddress) {
+      setError("Winner must be creator, accepter, or tie.");
+      console.log("Settle: Validation failed - invalid winner choice");
+      return;
+    }
+
+    const result = await settleContract(selectedContractId, submitterWalletAddress, winnerWalletAddress, reasoning);
     if (result.success) {
+      console.log("Settle: Settlement submitted successfully:", result.message);
       setSubmitterWalletAddress("");
-      setWinnerChoice("");
+      setWinnerWalletAddress("");
       setReasoning("");
       setSelectedContractId(null);
       alert(result.message);
     } else {
-      alert(`Error: ${result.error}`);
+      setError(`Error: ${result.error}`);
+      console.error("Settle: Failed to submit settlement:", result.error);
     }
   };
 
@@ -76,26 +154,33 @@ const Settle = () => {
   const handleResolveTwist = async (e) => {
     e.preventDefault();
     console.log("Settle: Resolving twist for contract_id:", selectedContractId);
+    setError("");
+
     if (!selectedContractId) {
-      alert("Please select a contract.");
+      setError("Please select a contract.");
+      console.log("Settle: Validation failed - no contract selected for twist");
       return;
     }
-    const contract = twistContracts.find((c) => c.contract_id === selectedContractId);
+    const contract = filteredContracts.find((c) => c.contract_id === selectedContractId);
     if (!contract) {
-      alert("Selected contract not found.");
+      setError("Selected contract not found.");
+      console.log("Settle: Validation failed - contract not found for twist");
       return;
     }
+
     const result = await triggerTwist(selectedContractId);
     if (result.success) {
+      console.log("Settle: Twist resolved successfully:", result.message);
       setSelectedContractId(null);
       alert(result.message);
     } else {
-      alert(`Error: ${result.error}`);
+      setError(`Error: ${result.error}`);
+      console.error("Settle: Failed to resolve twist:", result.error);
     }
   };
 
   // Render table for contracts
-  const renderTable = (contractsToRender, title, isTwist = false) => (
+  const renderTable = (contractsToRender, title) => (
     <div className="mt-6">
       <h2 className="text-base sm:text-xl font-semibold mb-4">{title}</h2>
       {contractsToRender.length === 0 ? (
@@ -109,24 +194,24 @@ const Settle = () => {
                   Contract ID
                 </th>
                 <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
-                  Question
+                  Event
                 </th>
                 <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
+                  Outcome
+                </th>
+                <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
+                  Position
+                </th>
+                <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
                   Status
                 </th>
-                <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
-                  Event Time
-                </th>
-                <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
-                  Category
-                </th>
-                <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
+                <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
                   Creator Choice
                 </th>
-                <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
+                <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
                   Accepter Choice
                 </th>
-                <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
+                <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
                   Select
                 </th>
               </tr>
@@ -144,31 +229,31 @@ const Settle = () => {
                     </Link>
                   </td>
                   <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
-                    {contract.question || "Not set"}
+                    {contract.eventTitle || "Not set"}
                   </td>
                   <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
+                    {contract.outcome || "Not set"}
+                  </td>
+                  <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
+                    {contract.position_type === "buy" ? "Buy (Back)" : "Sell (Lay)"}
+                  </td>
+                  <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
                     {formatStatus(contract.status)}
                   </td>
-                  <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
-                    {contract.time ? new Date(contract.time).toLocaleString() : "Not set"}
-                  </td>
-                  <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
-                    {contract.category || "Not set"}
-                  </td>
-                  <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
+                  <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
                     {contract.creator_winner_choice || "Not submitted"}
                   </td>
-                  <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
+                  <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
                     {contract.accepter_winner_choice || "Not submitted"}
                   </td>
-                  <td className="p-1 sm:p-4 max-w-[70px] text-[10px] sm:text-xs">
+                  <td className="p-1 sm:p-4 max-w-[50px] text-[10px] sm:text-xs">
                     <button
                       className="text-blue-500 hover:underline min-h-[44px]"
                       onClick={() => {
                         console.log("Settle: Selected contract_id:", contract.contract_id);
                         setSelectedContractId(contract.contract_id);
                       }}
-                      aria-label={`Select contract ${contract.contract_id} for ${isTwist ? "twist resolution" : "settlement"}`}
+                      aria-label={`Select contract ${contract.contract_id} for settlement or twist resolution`}
                     >
                       Select
                     </button>
@@ -201,22 +286,26 @@ const Settle = () => {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <main className="p-1 max-w-7xl mx-auto mt-6 sm:p-6">
+      <header className="bg-primary text-white p-4">
+        <h1 className="text-xl sm:text-2xl font-semibold">Settle Contracts</h1>
+      </header>
+      <main className="max-w-7xl mx-auto p-1 sm:p-6 mt-6">
         <div className="mb-6">
           <label htmlFor="userWalletAddress" className="block text-base sm:text-lg font-bold text-primary mb-2">
-            Your Wallet Address (Creator or Accepter)
+            Your Wallet Address (Required)
           </label>
           <input
             id="userWalletAddress"
             type="text"
-            placeholder="Enter your wallet address to view your contracts"
+            placeholder="Enter your DASH wallet address to view your contracts"
             className="border p-2 rounded w-full sm:w-1/2 min-h-[44px] text-[10px] sm:text-base"
             value={userWalletAddress}
             onChange={(e) => {
               console.log("Settle: Wallet Address changed:", e.target.value);
               setUserWalletAddress(e.target.value);
+              setError("");
             }}
-            aria-label="Enter your wallet address to view your contracts"
+            aria-label="Enter your DASH wallet address to view your contracts"
           />
         </div>
         {!userWalletAddress && (
@@ -224,8 +313,13 @@ const Settle = () => {
             Please enter your wallet address to view your contracts.
           </p>
         )}
-        {userWalletAddress && renderTable(acceptedContracts, "Accepted Contracts", false)}
-        {userWalletAddress && selectedContractId && acceptedContracts.find((c) => c.contract_id === selectedContractId) && (
+        {userWalletAddress && !validateWalletAddress(userWalletAddress) && (
+          <p className="text-red-500 text-xs sm:text-base mb-6">
+            Please enter a valid DASH wallet address (34 characters, starts with 'X').
+          </p>
+        )}
+        {validateWalletAddress(userWalletAddress) && renderTable(filteredContracts, "All Contracts")}
+        {validateWalletAddress(userWalletAddress) && selectedContractId && filteredContracts.find((c) => c.contract_id === selectedContractId) && (
           <div className="space-y-6 mt-6">
             <h3 className="text-base sm:text-lg font-semibold">Submit Winner for Contract #{selectedContractId}</h3>
             <form onSubmit={handleSettle} className="space-y-4">
@@ -238,45 +332,55 @@ const Settle = () => {
                   type="text"
                   className="border p-2 rounded w-full min-h-[44px] text-[10px] sm:text-base"
                   value={submitterWalletAddress}
-                  onChange={(e) => setSubmitterWalletAddress(e.target.value)}
+                  onChange={(e) => {
+                    console.log("Settle: Submitter wallet address changed:", e.target.value);
+                    setSubmitterWalletAddress(e.target.value);
+                  }}
                   placeholder="Enter your wallet address"
                   aria-label="Submitter wallet address"
                 />
               </div>
               <div>
-                <label htmlFor="winnerChoice" className="block text-base sm:text-lg font-bold text-primary mb-2">
+                <label htmlFor="winnerWalletAddress" className="block text-base sm:text-lg font-bold text-primary mb-2">
                   Winner Choice
                 </label>
                 <select
-                  id="winnerChoice"
+                  id="winnerWalletAddress"
                   className="border p-2 rounded w-full min-h-[44px] text-[10px] sm:text-base"
-                  value={winnerChoice}
-                  onChange={(e) => setWinnerChoice(e.target.value)}
+                  value={winnerWalletAddress}
+                  onChange={(e) => {
+                    console.log("Settle: Winner choice changed:", e.target.value);
+                    setWinnerWalletAddress(e.target.value);
+                  }}
                   aria-label="Winner choice for settling contract"
                 >
                   <option value="">Select winner or tie</option>
-                  <option value={acceptedContracts.find((c) => c.contract_id === selectedContractId)?.WalletAddress}>
-                    Creator ({acceptedContracts.find((c) => c.contract_id === selectedContractId)?.WalletAddress})
+                  <option value={filteredContracts.find((c) => c.contract_id === selectedContractId)?.WalletAddress}>
+                    Creator ({filteredContracts.find((c) => c.contract_id === selectedContractId)?.WalletAddress})
                   </option>
-                  <option value={acceptedContracts.find((c) => c.contract_id === selectedContractId)?.accepterWalletAddress}>
-                    Accepter ({acceptedContracts.find((c) => c.contract_id === selectedContractId)?.accepterWalletAddress})
+                  <option value={filteredContracts.find((c) => c.contract_id === selectedContractId)?.accepterWalletAddress}>
+                    Accepter ({filteredContracts.find((c) => c.contract_id === selectedContractId)?.accepterWalletAddress})
                   </option>
                   <option value="tie">Tie</option>
                 </select>
-                </div>
+              </div>
               <div>
                 <label htmlFor="reasoning" className="block text-base sm:text-lg font-bold text-primary mb-2">
-                  Reasoning (Optional)
+                  Reasoning
                 </label>
                 <textarea
                   id="reasoning"
                   className="border p-2 rounded w-full min-h-[100px] text-[10px] sm:text-base"
                   value={reasoning}
-                  onChange={(e) => setReasoning(e.target.value)}
-                  placeholder="Enter reasoning for your choice"
+                  onChange={(e) => {
+                    console.log("Settle: Reasoning changed:", e.target.value);
+                    setReasoning(e.target.value);
+                  }}
+                  placeholder="Enter reasoning for your winner choice (required)"
                   aria-label="Reasoning for winner choice"
                 />
               </div>
+              {error && <p className="text-red-500 text-xs sm:text-base">{error}</p>}
               <button
                 type="submit"
                 className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50 min-h-[44px] text-[10px] sm:text-base"
@@ -288,8 +392,7 @@ const Settle = () => {
             </form>
           </div>
         )}
-        {userWalletAddress && renderTable(twistContracts, "Twist Contracts", true)}
-        {userWalletAddress && selectedContractId && twistContracts.find((c) => c.contract_id === selectedContractId) && (
+        {validateWalletAddress(userWalletAddress) && selectedContractId && filteredContracts.find((c) => c.contract_id === selectedContractId)?.status === "twist" && (
           <div className="space-y-6 mt-6">
             <h3 className="text-base sm:text-lg font-semibold">Resolve Twist for Contract #{selectedContractId}</h3>
             <form onSubmit={handleResolveTwist} className="space-y-4">

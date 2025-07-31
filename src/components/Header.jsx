@@ -46,11 +46,11 @@ const Header = () => {
             Home
           </NavLink>
           <NavLink
-            to="/create"
+            to="/create-event"
             className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
-            aria-label="Create Contract"
+            aria-label="Create Event"
           >
-            Create Contract
+            Create Event
           </NavLink>
           <NavLink
             to="/marketplace"
@@ -101,12 +101,12 @@ const Header = () => {
             Home
           </NavLink>
           <NavLink
-            to="/create"
+            to="/create-event"
             className={({ isActive }) => `text-base hover:underline ${isActive ? "font-bold" : ""}`}
             onClick={() => setIsOpen(false)}
-            aria-label="Create Contract"
+            aria-label="Create Event"
           >
-            Create Contract
+            Create Event
           </NavLink>
           <NavLink
             to="/marketplace"

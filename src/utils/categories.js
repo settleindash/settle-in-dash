@@ -6,6 +6,7 @@ export const categories = [
   "Elections",
   "Weather",
   "Commodities",
+  "Stocks",
   "Sports",
   "Crypto",
   "Other",

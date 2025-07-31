@@ -21,10 +21,10 @@ const Home = () => {
           </p>
           <div className="space-x-2 sm:space-x-4">
             <Link
-              to="/create"
+              to="/create-event"
               className="bg-secondary text-white px-3 sm:px-4 py-2 rounded text-sm sm:text-lg font-inter"
             >
-              Create Contract
+              Create Event
             </Link>
             <Link
               to="/marketplace"
