@@ -71,9 +71,9 @@ const useContractDetails = (contract_id, contracts = []) => {
     // Assume outcome affects the calculation (e.g., "Yes" vs "No" could invert logic in some markets)
     // For simplicity, we'll base it on position_type as requested
     if (positionType === "buy") {
-      return (stake * percentage).toFixed(2); // buyToWin = percentage * stake
+      return stake.toFixed(2); // possiton type buy is not possible anymore maybe i will refactor later
     } else if (positionType === "sell") {
-      return stake.toFixed(2); // sellToWin = stake (1:1 return)
+      return (stake * percentage).toFixed(2); // remember it is reversed all contracts is sell, which means that contract will be buy for the user that accepts  
     }
     return "0.00"; // Default case
   };

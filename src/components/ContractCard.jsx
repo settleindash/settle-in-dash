@@ -86,11 +86,13 @@ const ContractCard = ({
           <h3 className="text-md font-semibold text-gray-700">Financial Overview</h3>
           <p className="mt-2 text-gray-600">Stake (What You Lose): {contract.stake ? `${contract.stake} DASH` : "Not set"}</p>
           <p className="mt-2 text-green-600 font-semibold">To Win (If Correct): {toWin(contract.outcome, contract.position_type)} DASH</p>
-          <p className="mt-2 text-gray-600">Odds: {contract.percentage || "Not set"}</p>
         </div>
         <div className="p-4 bg-gray-50 rounded-lg">
           <h3 className="text-md font-semibold text-gray-700">Acceptance Details</h3>
-          <p className="mt-2 text-gray-600">Accepter Stake: {accepterStake} DASH</p>
+          <p className="mt-2 text-gray-600">Outcome: {contract.outcome || "Not set"}</p>
+          <p className="mt-2 text-gray-600">Odds: {contract.percentage || "Not set"}</p>
+          <p className="mt-2 text-gray-600">Acceptance Deadline: {formatCustomDate(contract.acceptanceDeadline)}</p>
+          
         </div>
       </div>
 
@@ -102,7 +104,6 @@ const ContractCard = ({
         <p className="text-gray-600">Status: {formatStatus(contract.status)}</p>
         <p className="text-gray-600">Created At: {formatCustomDate(contract.created_at)}</p>
         <p className="text-gray-600">Event Time: {formatCustomDate(contract.time)}</p>
-        <p className="text-gray-600">Acceptance Deadline: {formatDate(contract.acceptanceDeadline)}</p>
       </div>
 
       {/* Parties Involved */}
