@@ -1,4 +1,7 @@
-import { useParams, useNavigate } from "react-router-dom";
+// src/pages/Contract.jsx
+// Page to display a single contract's details using ContractCard.
+
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useContracts } from "../hooks/useContracts";
 import { useEvents } from "../hooks/useEvents";
@@ -7,15 +10,17 @@ import ContractCard from "../components/ContractCard";
 const Contract = () => {
   const { contract_id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation(); // Added for debugging
   const { fetchContracts, contracts, error: contractsError, loading: contractsLoading } = useContracts();
   const { events, getEvents } = useEvents();
   const [eventTitle, setEventTitle] = useState("");
 
   useEffect(() => {
+    console.log("Contract: Fetching contract with contract_id:", contract_id, "route:", location.pathname);
     if (contract_id) {
       fetchContracts({ contract_id });
     }
-  }, [contract_id, fetchContracts]);
+  }, [contract_id, fetchContracts, location.pathname]);
 
   useEffect(() => {
     if (contracts.length > 0 && contract_id) {
@@ -39,15 +44,18 @@ const Contract = () => {
   }, [contracts, contract_id, events, getEvents]);
 
   if (contractsLoading) {
-    return <div className="min-h-screen bg-background p-4">Loading contract...</div>;
+    return (
+      <div className="min-h-screen bg-background p-4">
+        <main className="max-w-3xl mx-auto mt-6">
+          <p className="text-gray-600 text-sm">Loading contract...</p>
+        </main>
+      </div>
+    );
   }
 
   if (contractsError) {
     return (
       <div className="min-h-screen bg-background p-4">
-        <header className="bg-primary text-white p-4">
-          <h1 className="text-2xl font-semibold">Contract Details</h1>
-        </header>
         <main className="max-w-3xl mx-auto mt-6">
           <p className="text-red-500 text-sm">{contractsError}</p>
           <button
@@ -66,9 +74,6 @@ const Contract = () => {
   if (!contract) {
     return (
       <div className="min-h-screen bg-background p-4">
-        <header className="bg-primary text-white p-4">
-          <h1 className="text-2xl font-semibold">Contract Details</h1>
-        </header>
         <main className="max-w-3xl mx-auto mt-6">
           <p className="text-red-500 text-sm">Contract not found for ID: {contract_id}. Please visit the Settle page to view available contracts.</p>
           <button
@@ -83,11 +88,10 @@ const Contract = () => {
     );
   }
 
+  console.log("Contract: Rendering ContractCard with contract_id:", contract.contract_id, "route:", location.pathname);
+
   return (
     <div className="min-h-screen bg-background p-4">
-      <header className="bg-primary text-white p-4">
-        <h1 className="text-2xl font-semibold">Contract Details</h1>
-      </header>
       <main className="max-w-3xl mx-auto mt-6">
         <ContractCard
           contract={contract}

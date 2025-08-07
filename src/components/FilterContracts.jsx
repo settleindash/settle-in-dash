@@ -1,3 +1,6 @@
+// src/components/FilterContracts.jsx
+// Component to filter and paginate contracts, rendering them via ContractCard or custom renderContent.
+
 import { useState, useEffect, useMemo, useCallback } from "react";
 import ContractCard from "./ContractCard";
 
@@ -6,19 +9,23 @@ const FilterContracts = ({
   onFilterChange,
   contractsPerPage = 20,
   renderContent,
-  showFilters = true, // Toggle filter visibility
+  showFilters = true,
 }) => {
   const [search, setSearch] = useState("");
   const [contractIdFilter, setContractIdFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState(""); // Dynamic status filter (empty for all)
-  const [sortBy, setSortBy] = useState({ field: "", direction: "asc" }); // Sorting state
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sortBy, setSortBy] = useState({ field: "", direction: "asc" });
   const [page, setPage] = useState(1);
 
-  // Get current date/time in CEST
-  const now = new Date();
-  now.setUTCHours(now.getUTCHours() + 2); // Adjust to CEST (UTC+2), current time: 12:25 AM CEST, August 01, 2025
+  // Calculate now once per render to avoid unnecessary useMemo triggers
+  const now = useMemo(() => {
+    const date = new Date();
+    date.setUTCHours(date.getUTCHours() + 2); // CEST (UTC+2), August 5, 2025, 08:58 PM
+    console.log("FilterContracts: Calculated now:", date);
+    return date;
+  }, []);
 
-  // Memoize filteredContracts to prevent unnecessary recalculations
+  // Memoize filteredContracts
   const filteredContracts = useMemo(() => {
     console.log("FilterContracts: Recalculating filteredContracts");
     return (contracts || [])
@@ -31,7 +38,7 @@ const FilterContracts = ({
         return matchesSearch && matchesContractId && matchesStatus && isWithinDeadline;
       })
       .sort((a, b) => {
-        if (!sortBy.field) return 0; // No sorting if field is empty
+        if (!sortBy.field) return 0;
         const valueA = a[sortBy.field] || 0;
         const valueB = b[sortBy.field] || 0;
         if (sortBy.field === "created_at") {
@@ -41,7 +48,7 @@ const FilterContracts = ({
         }
         return sortBy.direction === "asc" ? valueA - valueB : valueB - valueA;
       });
-  }, [contracts, search, contractIdFilter, statusFilter, sortBy, now]);
+  }, [contracts, search, contractIdFilter, statusFilter, sortBy]);
 
   const paginatedContracts = filteredContracts.slice(
     (page - 1) * contractsPerPage,
@@ -57,13 +64,10 @@ const FilterContracts = ({
     console.log("FilterContracts: Filters cleared");
   }, []);
 
-  // Debounce the update to onFilterChange to prevent rapid state changes
+  // Notify parent of filtered contracts
   useEffect(() => {
-    const timer = setTimeout(() => {
-      console.log("FilterContracts: Updating filteredContracts in parent:", filteredContracts);
-      onFilterChange(filteredContracts);
-    }, 100); // 100ms debounce
-    return () => clearTimeout(timer);
+    console.log("FilterContracts: Updating filteredContracts in parent, count:", filteredContracts.length);
+    onFilterChange(filteredContracts);
   }, [filteredContracts, onFilterChange]);
 
   return (
@@ -116,7 +120,7 @@ const FilterContracts = ({
               value={statusFilter}
               onChange={(e) => {
                 console.log("FilterContracts: Status filter changed:", e.target.value);
-                setStatusFilter(e.target.value || ""); // Empty string for all statuses
+                setStatusFilter(e.target.value || "");
                 setPage(1);
               }}
               aria-label="Filter by contract status"
@@ -125,7 +129,8 @@ const FilterContracts = ({
               <option value="open">Open</option>
               <option value="accepted">Accepted</option>
               <option value="cancelled">Cancelled</option>
-              <option value="resolved">Resolved</option>
+              <option value="settled">Settled</option>
+              <option value="twist">Twist</option>
             </select>
           </div>
         </div>

@@ -8,14 +8,13 @@ const TermsSummary = () => (
       By creating a contract, you agree to the following:
     </p>
     <ul className="list-disc list-inside space-y-1 mb-2">
-      <li>Deposit a minimum 1 DASH stake and a 10% deposit, held in escrow.</li>
-      <li>Create a clear, verifiable question (e.g., “Will Bitcoin reach $100,000 by 2026?”).</li>
-      <li>Creator’s Percentage is the portion of the stake (in DASH) that the Creator wins if correct, or the Accepter pays if the Creator wins. The Accepter’s payout is the remaining portion (100% minus the Creator’s Percentage).</li>
-      <li>If you win, receive 97% of the Pot (House takes 3%); Accepter wins, they receive 95% (House takes 5%).</li>
-      <li>Agree on the outcome within 48 hours post-termination, or a Twist (Grok resolution) is triggered.</li>
-      <li>In a Twist, the loser forfeits their 10% deposit. Resolutions are published in the Transparency Portal.</li>
-      <li>Comply with local laws and accept risks of smart contract interactions.</li>
-    </ul>
+      <li>Minimum of 1 DASH required to create a contract.</li>
+      <li>Create a clear, verifiable question for the contract (e.g., “Will Bitcoin reach $100,000 by December 31, 2026?”).</li>
+      <li>When creating a contract, an additional contract worth 10% of the stake is automatically created. This amount is refunded when the contract is settled without a dispute.</li>
+      <li>Agree on the outcome within 48 hours after the event concludes. If no agreement is reached, the contract escalates, triggering a Twist (Grok resolution). The party deemed incorrect loses their stake and the 10% additional contract to the other party.</li>
+      <li>A 2% fee is applied to your net winnings.</li>
+      <li>Ensure compliance with local laws and understand the risks associated with smart contract interactions.</li>
+          </ul>
     <p>
       Read our full{" "}
       <Link

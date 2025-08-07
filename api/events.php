@@ -28,9 +28,42 @@ try {
     exit;
 }
 
+// Minimal validation function to ensure database integrity
+function validateEventCreation($data) {
+    $errors = [];
+    $currentDateTime = new DateTime('now', new DateTimeZone('Europe/Paris'));
+
+    // Check required fields
+    $required_fields = ['title', 'category', 'event_date', 'possible_outcomes', 'event_wallet_address'];
+    foreach ($required_fields as $field) {
+        if (!isset($data[$field]) || empty($data[$field])) {
+            $errors[] = "Missing or empty required field: $field";
+        }
+    }
+
+    // Validate event_date format
+    if (isset($data['event_date']) && !empty($data['event_date'])) {
+        try {
+            new DateTime($data['event_date'], new DateTimeZone('Europe/Paris'));
+        } catch (Exception $e) {
+            $errors[] = "Invalid event date format";
+        }
+    }
+
+    // Validate possible_outcomes is an array
+    if (isset($data['possible_outcomes']) && !is_array($data['possible_outcomes'])) {
+        $errors[] = "Possible outcomes must be an array";
+    }
+
+    return [
+        'isValid' => empty($errors),
+        'message' => empty($errors) ? '' : implode('. ', $errors)
+    ];
+}
+
 // Handle HTTP methods
 $method = $_SERVER["REQUEST_METHOD"];
-$currentDateTime = date('Y-m-d H:i:s');
+$currentDateTime = (new DateTime('now', new DateTimeZone('Europe/Paris')))->format('Y-m-d H:i:s');
 
 if ($method === "OPTIONS") {
     http_response_code(200);
@@ -74,82 +107,33 @@ elseif ($method === "POST") {
         exit;
     }
 
-    // Required fields
-    $required_fields = ['title', 'category', 'event_date', 'possible_outcomes'];
-    foreach ($required_fields as $field) {
-        if (!isset($data[$field])) {
-            error_log("POST: Missing required field - $field");
-            http_response_code(400);
-            echo json_encode(["error" => "Missing required field: $field"]);
-            exit;
-        }
+    error_log("POST: Received data: " . print_r($data, true)); // Debug log
+
+    // Validate inputs using validateEventCreation
+    $validationResult = validateEventCreation($data);
+    if (!$validationResult['isValid']) {
+        error_log("POST: Validation failed - " . $validationResult['message']);
+        http_response_code(400);
+        echo json_encode(["error" => $validationResult['message']]);
+        exit;
     }
 
-    // Sanitize and validate inputs
+    // Sanitize inputs
     $title = filter_var($data['title'], FILTER_SANITIZE_STRING);
     $category = filter_var($data['category'], FILTER_SANITIZE_STRING);
-    $event_date = $data['event_date'];
-    $possible_outcomes = $data['possible_outcomes']; // Expecting array
+    $event_date = (new DateTime($data['event_date'], new DateTimeZone('Europe/Paris')))->format('Y-m-d H:i:s');
+    $possible_outcomes = json_encode($data['possible_outcomes']);
     $oracle_source = isset($data['oracle_source']) ? filter_var($data['oracle_source'], FILTER_SANITIZE_STRING) : null;
+    $event_wallet_address = filter_var($data['event_wallet_address'], FILTER_SANITIZE_STRING);
     $event_id = isset($data['event_id']) ? filter_var($data['event_id'], FILTER_SANITIZE_STRING) : uniqid("EVENT_");
-
-    // Validate inputs
-    try {
-        $event_date = (new DateTime($event_date))->format('Y-m-d H:i:s');
-    } catch (Exception $e) {
-        error_log("POST: Invalid event_date format - " . $e->getMessage());
-        http_response_code(400);
-        echo json_encode(["error" => "Invalid event_date format: " . $e->getMessage()]);
-        exit;
-    }
-
-    if (empty($title) || strlen($title) > 255) {
-        error_log("POST: Validation failed - Invalid title");
-        http_response_code(400);
-        echo json_encode(["error" => "Title must be non-empty and less than 255 characters"]);
-        exit;
-    }
-    if (empty($category) || strlen($category) > 100) {
-        error_log("POST: Validation failed - Invalid category");
-        http_response_code(400);
-        echo json_encode(["error" => "Category must be non-empty and less than 100 characters"]);
-        exit;
-    }
-    if (strtotime($event_date) <= strtotime($currentDateTime)) {
-        error_log("POST: Validation failed - Event date must be in the future");
-        http_response_code(400);
-        echo json_encode(["error" => "Event date must be in the future"]);
-        exit;
-    }
-    if (!is_array($possible_outcomes) || count($possible_outcomes) < 2) {
-        error_log("POST: Validation failed - At least two possible outcomes required");
-        http_response_code(400);
-        echo json_encode(["error" => "At least two possible outcomes are required"]);
-        exit;
-    }
-    foreach ($possible_outcomes as $outcome) {
-        if (empty($outcome) || strlen($outcome) > 255) {
-            error_log("POST: Validation failed - Invalid outcome");
-            http_response_code(400);
-            echo json_encode(["error" => "Each outcome must be non-empty and less than 255 characters"]);
-            exit;
-        }
-    }
-    $possible_outcomes_json = json_encode($possible_outcomes);
-    if (!$possible_outcomes_json) {
-        error_log("POST: Validation failed - Failed to encode outcomes as JSON");
-        http_response_code(400);
-        echo json_encode(["error" => "Failed to encode outcomes as JSON"]);
-        exit;
-    }
 
     // Insert event
     try {
         $stmt = $pdo->prepare(
-            "INSERT INTO events (event_id, title, category, event_date, possible_outcomes, oracle_source, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, NOW())"
+            "INSERT INTO events (event_id, title, category, event_date, possible_outcomes, oracle_source, eventWalletAddress, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())"
         );
-        $stmt->execute([$event_id, $title, $category, $event_date, $possible_outcomes_json, $oracle_source]);
+        $stmt->execute([$event_id, $title, $category, $event_date, $possible_outcomes, $oracle_source, $event_wallet_address]);
         error_log("POST: Event created successfully - event_id: $event_id");
         echo json_encode(["success" => true, "event_id" => $event_id]);
     } catch (PDOException $e) {

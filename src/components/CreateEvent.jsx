@@ -1,12 +1,14 @@
 // src/components/CreateEvent.jsx
 // Component to create a new event for Settle In DASH.
-// Collects title, category, event date, possible outcomes, and oracle source.
+// Collects title, category, event date, possible outcomes, oracle source, and event wallet address.
 // Uses useEvents hook to create the event and navigates to marketplace on success.
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useEvents } from "../hooks/useEvents";
 import { categories } from "../utils/categories";
+import { validateEventCreation } from "../utils/validation"; // Import validation
+import PageHeader from "../utils/formats/PageHeader.jsx"; // Import reusable header
 import TermsSummary from "./TermsSummary";
 
 const CreateEvent = () => {
@@ -15,6 +17,7 @@ const CreateEvent = () => {
   const [eventDate, setEventDate] = useState("");
   const [possibleOutcomes, setPossibleOutcomes] = useState(["", ""]);
   const [oracleSource, setOracleSource] = useState("");
+  const [eventWalletAddress, setEventWalletAddress] = useState(""); // New state for wallet address
   const [error, setError] = useState("");
   const { createEvent, loading } = useEvents();
   const navigate = useNavigate();
@@ -46,47 +49,27 @@ const CreateEvent = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("CreateEvent: Form submitted:", { title, category, eventDate, possibleOutcomes, oracleSource });
+    console.log("CreateEvent: Form submitted:", { title, category, eventDate, possibleOutcomes, oracleSource, eventWalletAddress });
     setError("");
 
-    // Validate inputs
-    if (!title || title.length > 255) {
-      setError("Title must be non-empty and less than 255 characters");
-      console.log("CreateEvent: Validation failed - invalid title");
+    // Validate inputs using validateEventCreation
+    const validationData = {
+      title,
+      category,
+      eventDate,
+      possibleOutcomes,
+      oracleSource,
+      eventWalletAddress,
+    };
+    const validationResult = validateEventCreation(validationData);
+    if (!validationResult.isValid) {
+      setError(validationResult.message);
+      console.log("CreateEvent: Validation failed:", validationResult.message);
       return;
     }
-    if (!category) {
-      setError("Category is required");
-      console.log("CreateEvent: Validation failed - no category");
-      return;
-    }
-    if (!eventDate) {
-      setError("Event date is required");
-      console.log("CreateEvent: Validation failed - no event date");
-      return;
-    }
-    const eventTime = new Date(`${eventDate}:00+02:00`);
-    if (isNaN(eventTime.getTime())) {
-      setError("Invalid event date format");
-      console.log("CreateEvent: Validation failed - invalid event date");
-      return;
-    }
-    if (eventTime <= new Date(Date.now() + 5 * 60 * 1000)) {
-      setError("Event date must be at least 5 minutes in the future");
-      console.log("CreateEvent: Validation failed - event date not future");
-      return;
-    }
+
+    const eventTime = new Date(`${eventDate}:00+02:00`); // Use Europe/Paris timezone
     const validOutcomes = possibleOutcomes.filter(outcome => outcome.trim() !== "");
-    if (validOutcomes.length < 2) {
-      setError("At least two non-empty outcomes are required");
-      console.log("CreateEvent: Validation failed - insufficient outcomes");
-      return;
-    }
-    if (oracleSource && oracleSource.length > 255) {
-      setError("Oracle source must be less than 255 characters");
-      console.log("CreateEvent: Validation failed - invalid oracle source");
-      return;
-    }
 
     const result = await createEvent({
       title,
@@ -94,6 +77,7 @@ const CreateEvent = () => {
       event_date: eventTime.toISOString(),
       possible_outcomes: validOutcomes,
       oracle_source: oracleSource || null,
+      event_wallet_address: eventWalletAddress, // Include wallet address
     });
 
     if (result.error) {
@@ -107,9 +91,7 @@ const CreateEvent = () => {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <header className="bg-primary text-white p-4">
-        <h1 className="text-2xl font-semibold">Create Event</h1>
-      </header>
+      <PageHeader title="Create Event" />
       <main className="max-w-3xl mx-auto mt-6">
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-6">
           <div className="mb-6">
@@ -170,7 +152,7 @@ const CreateEvent = () => {
               aria-label="Event date and time"
             />
             <p className="text-gray-600 text-xs sm:text-sm mt-1">
-              Select a future date and time (at least 5 minutes from now).
+              Select a future date and time (at least 5 minutes from now, Europe/Paris timezone).
             </p>
           </div>
 
@@ -208,6 +190,24 @@ const CreateEvent = () => {
             >
               Add Outcome
             </button>
+          </div>
+
+          <div className="mb-6">
+            <label htmlFor="eventWalletAddress" className="block text-lg sm:text-xl font-bold text-primary mb-2">
+              Submit Your Wallet Address
+            </label>
+            <input
+              id="eventWalletAddress"
+              type="text"
+              className="border p-2 rounded w-full text-sm sm:text-base"
+              value={eventWalletAddress}
+              onChange={(e) => {
+                console.log("CreateEvent: Event wallet address changed:", e.target.value);
+                setEventWalletAddress(e.target.value);
+              }}
+              placeholder="Enter a valid DASH address (starts with 'X', 34 characters)"
+              aria-label="Event wallet address"
+            />
           </div>
 
           <div className="mb-6">

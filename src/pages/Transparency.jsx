@@ -1,8 +1,12 @@
+// src/pages/Transparency.jsx
+// Displays contracts with filtering via FilterContracts, using PageHeader for consistent headline formatting.
+
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useContracts } from "../hooks/useContracts";
 import { useEvents } from "../hooks/useEvents";
 import FilterContracts from "../components/FilterContracts";
+import PageHeader from "../utils/formats/PageHeader.jsx";
 
 const Transparency = () => {
   const { contracts, fetchContracts, loading, error: apiError } = useContracts();
@@ -61,16 +65,10 @@ const Transparency = () => {
                     Outcome
                   </th>
                   <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
-                    Created At
-                  </th>
-                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
                     Winner
                   </th>
                   <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
-                    Creator Choice
-                  </th>
-                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
-                    Accepter Choice
+                    Created At
                   </th>
                 </tr>
               </thead>
@@ -93,16 +91,10 @@ const Transparency = () => {
                       {contract.outcome || "Not set"}
                     </td>
                     <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
-                      {contract.created_at ? new Date(contract.created_at).toLocaleString() : "Not set"}
-                    </td>
-                    <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
                       {contract.winner || "Not set"}
                     </td>
                     <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
-                      {contract.creator_winner_choice || "Not set"}
-                    </td>
-                    <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
-                      {contract.accepter_winner_choice || "Not set"}
+                      {contract.created_at ? new Date(contract.created_at).toLocaleString() : "Not set"}
                     </td>
                   </tr>
                 ))}
@@ -121,9 +113,7 @@ const Transparency = () => {
   if (apiError) {
     return (
       <div className="min-h-screen bg-background p-4">
-        <header className="bg-primary text-white p-4">
-          <h1 className="text-xl sm:text-2xl font-semibold">Transparency</h1>
-        </header>
+        <PageHeader title="Transparency" />
         <main className="max-w-7xl mx-auto p-1 sm:p-6 mt-6">
           <p className="text-red-500 text-xs sm:text-sm">Error: {apiError}</p>
         </main>
@@ -133,9 +123,7 @@ const Transparency = () => {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <header className="bg-primary text-white p-4">
-        <h1 className="text-xl sm:text-2xl font-semibold">Transparency</h1>
-      </header>
+      <PageHeader title="Transparency" />
       <main className="p-1 max-w-7xl mx-auto mt-6 sm:p-6">
         <FilterContracts
           contracts={enrichedContracts}

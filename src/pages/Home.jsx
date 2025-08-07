@@ -17,6 +17,9 @@ const Home = () => {
             Welcome to Settle In DASH
           </h1>
           <p className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl text-gray-600 mb-6 sm:mb-8 md:mb-10 lg:mb-12 xl:mb-14">
+            This is a beta version! All contracts are fictive with no obligations. Have fun before smart contracts in DASH go live!
+          </p>
+          <p className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl text-gray-600 mb-6 sm:mb-8 md:mb-10 lg:mb-12 xl:mb-14">
             Bet on the Future with DASH
           </p>
           <div className="space-x-2 sm:space-x-4">

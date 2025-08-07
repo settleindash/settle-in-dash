@@ -1,9 +1,12 @@
+// src/components/CreateContractjsx
+
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useContracts } from "../hooks/useContracts";
 import { useEvents } from "../hooks/useEvents";
 import TermsSummary from "./TermsSummary";
 import { validateWalletAddress, validateContractCreation } from "../utils/validation";
+import PageHeader from "../utils/formats/PageHeader.jsx";
 
 const CreateContract = () => {
   const [eventId, setEventId] = useState("");
@@ -118,9 +121,7 @@ const CreateContract = () => {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <header className="bg-primary text-white p-4">
-        <h1 className="text-2xl font-semibold">Create Contract</h1>
-      </header>
+      <PageHeader title="Create Contract" />
       <main className="max-w-3xl mx-auto mt-6">
         {eventsLoading && <p className="text-gray-600 text-sm sm:text-base">Loading events...</p>}
         {eventsError && <p className="text-red-500 text-sm sm:text-base">Error: {eventsError}</p>}

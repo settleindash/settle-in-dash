@@ -403,8 +403,8 @@ elseif ($method === "PUT") {
  $payout = $choices[" creator_winner_choice"] === "tie" 
  ? "Split"
  : ($choices["creator_winner_choice"] === $contract["WalletAddress"]
- ? $contract["stake"] * ($contract["position_type"] === "buy" ? 0.97 * $contract["percentage"] : 0.97)
- : $contract["stake"] * ($contract["position_type"] === "sell" ? 0.95 * $contract["percentage"] : 0.95));
+ ? $contract["stake"] * ($contract["position_type"] === "buy" ? 0.99 * $contract["percentage"] : 0.99)
+ : $contract["stake"] * ($contract["position_type"] === "sell" ? 0.99 * $contract["percentage"] : 0.99));
  try {
  $stmt = $pdo->prepare(
  "UPDATE contracts SET status = 'settled', winner = ? WHERE contract_id = ?"
@@ -494,8 +494,8 @@ elseif ($method === "PUT") {
  $payout = $winner === "tie" 
  ? "Split"
  : ($winner === $contract["WalletAddress"]
- ? $contract["stake"] * ($contract["position_type"] === "buy" ? 0.97 * $contract["percentage"] : 0.97)
- : $contract["stake"] * ($contract["position_type"] === "sell" ? 0.95 * $contract["percentage"] : 0.95));
+ ? $contract["stake"] * ($contract["position_type"] === "buy" ? 0.98 * $contract["percentage"] : 0.98)
+ : $contract["stake"] * ($contract["position_type"] === "sell" ? 0.98 * $contract["percentage"] : 0.98));
  $timestamp = date("Y-m-d H:i:s");
  try {
  $stmt = $pdo->prepare(

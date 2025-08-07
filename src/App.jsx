@@ -11,6 +11,7 @@ import Support from "./pages/Support";
 import CreateEvent from "./components/CreateEvent";
 import CreateContract from "./components/CreateContract";
 import Contract from "./pages/Contract";
+import ContractCard from "./components/ContractCard";
 import Settle from "./pages/Settle";
 import OrderBook from "./components/OrderBook";
 import TermsAndConditions from "./pages/TermsAndConditions";
@@ -27,6 +28,7 @@ const AppContent = () => {
           <Route path="/" element={<Home />} />
           <Route path="/marketplace" element={<Marketplace />} />
           <Route path="/settle" element={<Settle />} />
+          <Route path="/contract-card" element={<ContractCard />} />
           <Route path="/transparency" element={<Transparency />} />
           <Route path="/about" element={<About />} />
           <Route path="/support" element={<Support />} />

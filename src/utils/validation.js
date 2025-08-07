@@ -1,5 +1,5 @@
 // src/utils/validation.js
-// Utility functions for validating contract-related data
+// Utility functions for validating contract and event-related data
 
 const validBase58Chars = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/;
 
@@ -76,6 +76,48 @@ export const validateContractCreation = (data, event) => {
   const outcomes = JSON.parse(event.possible_outcomes || "[]") || event.possible_outcomes?.split(",") || [];
   if (!outcomes.includes(data.outcome)) {
     errors.push("Outcome must be valid for the selected event");
+  }
+
+  return {
+    isValid: errors.length === 0,
+    message: errors.length > 0 ? errors.join(". ") : "",
+  };
+};
+
+/**
+ * Validates event creation data.
+ * @param {Object} data - Event creation data (title, category, eventDate, possibleOutcomes, oracleSource, eventWalletAddress).
+ * @returns {Object} { isValid: boolean, message: string } - Validation result and combined error message if invalid.
+ */
+export const validateEventCreation = (data) => {
+  const errors = [];
+
+  if (!data.title || data.title.length > 255) {
+    errors.push("Title must be non-empty and less than 255 characters");
+  }
+  if (!data.category) {
+    errors.push("Category is required");
+  }
+  if (!data.eventDate) {
+    errors.push("Event date is required");
+  } else {
+    const eventTime = new Date(`${data.eventDate}:00+02:00`);
+    if (isNaN(eventTime.getTime())) {
+      errors.push("Invalid event date format");
+    } else if (eventTime <= new Date(Date.now() + 5 * 60 * 1000)) {
+      errors.push("Event date must be at least 5 minutes in the future");
+    }
+  }
+  const validOutcomes = data.possibleOutcomes.filter(outcome => outcome.trim() !== "");
+  if (validOutcomes.length < 2) {
+    errors.push("At least two non-empty outcomes are required");
+  }
+  if (data.oracleSource && data.oracleSource.length > 255) {
+    errors.push("Oracle source must be less than 255 characters");
+  }
+  const walletValidation = validateWalletAddress(data.eventWalletAddress);
+  if (!walletValidation.isValid) {
+    errors.push(walletValidation.message);
   }
 
   return {
