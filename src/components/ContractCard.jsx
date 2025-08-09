@@ -83,8 +83,9 @@ const ContractCard = ({
       });
       if (result.success) {
         setMessage("Contract accepted successfully!");
-        if (onAcceptSuccess) onAcceptSuccess();
-        setAccepterWalletAddress("");
+        if (onAcceptSuccess) onAcceptSuccess(); // Trigger parent refresh
+        setAccepterWalletAddress(""); // Clear input
+        console.log("ContractCard: Contract accepted successfully, triggering onAcceptSuccess");
       } else {
         setError(result.error || "Failed to accept contract");
         console.error("ContractCard: API error accepting contract", result.error);
@@ -119,7 +120,6 @@ const ContractCard = ({
         <div className="mb-6">
           <h3 className="text-md font-semibold text-gray-700 mb-2">Contract Info</h3>
           <p className="text-gray-600">Contract ID: {contract.contract_id || "Not set"}</p>
-          <p className="text-gray-600">Position: {contract.position_type === "buy" ? "Buy (Back)" : "Sell (Lay)"}</p>
           <p className="text-gray-600">Status: {formatStatus(contract.status)}</p>
           <p className="text-gray-600">Created At: {formatCustomDate(contract.created_at)}</p>
           <p className="text-gray-600">Event Time: {formatCustomDate(contract.time)}</p>
@@ -184,6 +184,7 @@ const ContractCard = ({
               onChange={(e) => setAccepterWalletAddress(e.target.value)}
               placeholder="Enter a valid DASH address (starts with 'X', 34 characters)"
               aria-label="Accepter wallet address"
+              disabled={contract.status !== "open"} // Disable input after acceptance
             />
             {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
             {message && <p className="text-green-500 text-sm mt-2">{message}</p>}
@@ -191,7 +192,7 @@ const ContractCard = ({
               className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-4 text-sm w-full"
               onClick={handleAcceptContract}
               aria-label={`Accept ${contract.position_type} contract ${contract.contract_id}`}
-              disabled={contractsLoading}
+              disabled={contractsLoading || contract.status !== "open"} // Disable button after acceptance
             >
               {contractsLoading ? "Processing..." : contract.position_type === "buy" ? "Sell (Lay)" : "Buy (Back)"} Contract
             </button>
