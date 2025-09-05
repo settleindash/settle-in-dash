@@ -3,65 +3,28 @@
 // API to manage events in the MariaDB database for Settle In DASH.
 // Supports GET (retrieve events) and POST (create event).
 
-// Define SECURE_ACCESS immediately and verify it
-define('SECURE_ACCESS', true);
-if (!defined('SECURE_ACCESS')) {
-    http_response_code(500);
-    error_log("events.php: SECURE_ACCESS not defined after setting");
-    echo json_encode(["error" => "Internal configuration error"]);
-    exit;
-}
-
-// Use absolute path with debug for config inclusion
-$configPath = realpath(__DIR__ . '/../config/config.php');
-if ($configPath === false || !file_exists($configPath)) {
-    http_response_code(500);
-    error_log("events.php: Config file not found at: " . __DIR__ . '/../config/config.php');
-    echo json_encode(["error" => "Configuration file not found at: " . __DIR__ . '/../config/config.php']);
-    exit;
-}
-error_log("events.php: Config path resolved to: " . $configPath);
-require_once $configPath;
+// Include database configuration
+require_once "../config/config.php";
 
 // Enable error logging
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
-ini_set('error_log', __DIR__ . '/../logs/php_errors.log');
-error_log("events.php: Script started, method: " . $_SERVER["REQUEST_METHOD"]);
+ini_set('error_log', '../logs/php_errors.log');
 
-// Enable CORS dynamically for both domains
-$allowedOrigins = [
-    'https://settleindash.com',
-    'https://www.settleindash.com'
-];
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (in_array($origin, $allowedOrigins)) {
-    header("Access-Control-Allow-Origin: $origin");
-} else {
-    header("Access-Control-Allow-Origin: https://settleindash.com"); // Fallback
-}
+// Enable CORS
+header("Access-Control-Allow-Origin: https://settleindash.com");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json");
-error_log("events.php: Headers sent: Access-Control-Allow-Origin: " . ($origin ? $origin : 'https://settleindash.com'));
-
-
 
 // Connect to MariaDB using PDO
 try {
-    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
+    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    error_log("events.php: Database connection successful");
 } catch (PDOException $e) {
-    error_log("events.php: Connection failed: " . $e->getMessage());
+    error_log("Connection failed: " . $e->getMessage());
     http_response_code(500);
     echo json_encode(["error" => "Connection failed: " . $e->getMessage()]);
-    exit;
-}
-
-// Handle OPTIONS preflight request
-if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
-    http_response_code(200);
     exit;
 }
 
@@ -102,6 +65,11 @@ function validateEventCreation($data) {
 $method = $_SERVER["REQUEST_METHOD"];
 $currentDateTime = (new DateTime('now', new DateTimeZone('Europe/Paris')))->format('Y-m-d H:i:s');
 
+if ($method === "OPTIONS") {
+    http_response_code(200);
+    exit;
+}
+
 if ($method === "GET") {
     $event_id = isset($_GET["event_id"]) ? filter_var($_GET["event_id"], FILTER_SANITIZE_STRING) : null;
     $category = isset($_GET["category"]) ? filter_var($_GET["category"], FILTER_SANITIZE_STRING) : null;
@@ -122,10 +90,7 @@ if ($method === "GET") {
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $jsonOutput = json_encode($events);
-        error_log("events.php: GET successful, events count: " . count($events));
-        error_log("events.php: JSON output: " . substr($jsonOutput, 0, 500));
-        echo $jsonOutput;
+        echo json_encode($events);
     } catch (PDOException $e) {
         error_log("GET: Failed to retrieve events - " . $e->getMessage());
         http_response_code(500);
@@ -142,7 +107,7 @@ elseif ($method === "POST") {
         exit;
     }
 
-    error_log("POST: Received data: " . print_r($data, true));
+    error_log("POST: Received data: " . print_r($data, true)); // Debug log
 
     // Validate inputs using validateEventCreation
     $validationResult = validateEventCreation($data);

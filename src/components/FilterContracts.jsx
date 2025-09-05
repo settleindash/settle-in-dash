@@ -20,7 +20,7 @@ const FilterContracts = ({
   // Calculate now once per render to avoid unnecessary useMemo triggers
   const now = useMemo(() => {
     const date = new Date();
-    date.setUTCHours(date.getUTCHours() + 2); // CEST (UTC+2), August 5, 2025, 08:58 PM
+    date.setUTCHours(date.getUTCHours() + 2); // CEST (UTC+2), August 18, 2025, 08:31 PM
     console.log("FilterContracts: Calculated now:", date);
     return date;
   }, []);
@@ -153,7 +153,7 @@ const FilterContracts = ({
               aria-label="Sort contracts"
             >
               <option value="">None</option>
-              <option value="percentage">Odds</option>
+              <option value="odds">Odds</option> {/* Updated from percentage */}
               <option value="stake">Stake</option>
               <option value="created_at">Created At</option>
             </select>

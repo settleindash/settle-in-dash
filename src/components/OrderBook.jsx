@@ -1,3 +1,6 @@
+// src/components/OrderBook.jsx
+// Component to display an order book for a specific event, showing contracts by outcome.
+
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useContracts } from "../hooks/useContracts";
@@ -95,14 +98,14 @@ const OrderBook = () => {
       return <p className="text-gray-600 text-sm">No open contracts available for this event.</p>;
     }
 
-    // Group contracts by outcome and sort by percentage in descending order
+    // Group contracts by outcome and sort by odds in descending order
     const contractsByOutcome = uniqueOutcomes.map((outcome) => {
       const outcomeContracts = contractsToRender
         .filter((c) => c.outcome === outcome && c.position_type === "sell") // Only show sell contracts (for buying)
         .sort((a, b) => {
-          const percA = Number(a.percentage) || 0;
-          const percB = Number(b.percentage) || 0;
-          return percB - percA; // Descending order (highest odds at the top)
+          const oddsA = Number(a.odds) || 0; // Updated from percentage
+          const oddsB = Number(b.odds) || 0; // Updated from percentage
+          return oddsB - oddsA; // Descending order (highest odds at the top)
         });
       return { outcome, contracts: outcomeContracts };
     });
@@ -115,15 +118,15 @@ const OrderBook = () => {
 
     // Calculate payout ratio for each row
     const calculatePayoutRatio = (rowIndex) => {
-      const percentages = contractsByOutcome
+      const odds = contractsByOutcome
         .map((group) => {
           const contract = group.contracts[rowIndex];
-          return contract ? Number(contract.percentage) || 0 : null;
+          return contract ? Number(contract.odds) || 0 : null; // Updated from percentage
         })
         .filter((p) => p !== null); // Exclude null (no contract)
-      if (percentages.length === 0) return null;
-      const sum = percentages.reduce((acc, curr) => acc + curr, 0);
-      return ((sum / percentages.length - 1) * 100).toFixed(0) + "%"; // Convert to percentage
+      if (odds.length === 0) return null;
+      const sum = odds.reduce((acc, curr) => acc + curr, 0);
+      return (sum / odds.length).toFixed(2); // Display average odds
     };
 
     return (
@@ -141,7 +144,7 @@ const OrderBook = () => {
                   {outcome}
                 </th>
               ))}
-              <th className="border p-2 text-left min-w-[150px]">Total Payout Ratio</th>
+              <th className="border p-2 text-left min-w-[150px]">Average Odds</th>
             </tr>
           </thead>
           <tbody>
@@ -165,8 +168,8 @@ const OrderBook = () => {
                           className="text-blue-500 hover:underline"
                           aria-label={`View contract ${contract.contract_id} for ${outcome}`}
                         >
-                          {Number(contract.percentage)
-                            ? `${Number(contract.percentage).toFixed(2)} (${contract.stake} DASH)`
+                          {Number(contract.odds) // Updated from percentage
+                            ? `${Number(contract.odds).toFixed(2)} (${contract.stake} DASH)`
                             : "N/A"}
                         </Link>
                       ) : (
@@ -197,8 +200,8 @@ const OrderBook = () => {
             <p>
               Welcome to the Order Book for {eventTitle || "this event"}. Here, you can view available
               contracts to buy (accept) for each outcome. Each column shows contracts for an outcome,
-              sorted by odds (highest first). Click the odds to view and accept a contract. The Total
-              Payout Ratio shows the average odds across outcomes, helping you assess the spread. To
+              sorted by odds (highest first). Click the odds to view and accept a contract. The Average
+              Odds shows the mean odds across outcomes, helping you assess the spread. To
               create a new sell contract, click "Create Contract".
             </p>
           </div>
@@ -216,6 +219,8 @@ const OrderBook = () => {
                 timeStyle: "short"
               }) : "N/A"}
             </p>
+            <p>Sell (lay) the outcome you don’t believe in!</p>
+            <p>Buy (back) the outcome you do believe in!</p> 
           </div>
         </div>
         <button

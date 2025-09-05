@@ -18,10 +18,9 @@ const FilterEvents = ({
 
   // Stable current date/time in CEST
   const now = useMemo(() => {
-    const date = new Date();
-    date.setUTCHours(date.getUTCHours() + 2); // CEST, August 5, 2025, 09:26 PM
+    const date = new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' });
     console.log("FilterEvents: Calculated now:", date);
-    return date;
+    return new Date(date);
   }, []);
 
   // Memoize filteredEvents
@@ -34,7 +33,7 @@ const FilterEvents = ({
         const eventDate = new Date(e.event_date);
         const isUpcoming = !isNaN(eventDate.getTime()) && eventDate > now;
         if (!isUpcoming && e.event_date) {
-          console.log("FilterEvents: Excluded event due to past/invalid date:", {
+          console.log("FilterEvents: Excluded event due to past/invalid event date:", {
             event_id: e.event_id,
             title: e.title,
             event_date: e.event_date,

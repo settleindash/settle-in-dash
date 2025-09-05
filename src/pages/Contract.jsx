@@ -10,11 +10,12 @@ import ContractCard from "../components/ContractCard";
 const Contract = () => {
   const { contract_id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation(); // Added for debugging
+  const location = useLocation();
   const { fetchContracts, contracts, error: contractsError, loading: contractsLoading } = useContracts();
   const { events, getEvents } = useEvents();
   const [eventTitle, setEventTitle] = useState("");
 
+  // Fetch contract data
   useEffect(() => {
     console.log("Contract: Fetching contract with contract_id:", contract_id, "route:", location.pathname);
     if (contract_id) {
@@ -22,6 +23,7 @@ const Contract = () => {
     }
   }, [contract_id, fetchContracts, location.pathname]);
 
+  // Update event title
   useEffect(() => {
     if (contracts.length > 0 && contract_id) {
       const foundContract = contracts.find((c) => c.contract_id === contract_id);
@@ -42,6 +44,14 @@ const Contract = () => {
       }
     }
   }, [contracts, contract_id, events, getEvents]);
+
+  // Handle contract acceptance success
+  const handleAcceptSuccess = () => {
+    console.log("Contract: onAcceptSuccess triggered, refetching contract_id:", contract_id);
+    if (contract_id) {
+      fetchContracts({ contract_id });
+    }
+  };
 
   if (contractsLoading) {
     return (
@@ -98,6 +108,7 @@ const Contract = () => {
           eventTitle={eventTitle}
           isSingleView={true}
           navigateTo="/settle"
+          onAcceptSuccess={handleAcceptSuccess} // Pass callback to refetch contract
         />
       </main>
     </div>

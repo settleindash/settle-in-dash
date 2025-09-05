@@ -15,10 +15,15 @@ import ContractCard from "./components/ContractCard";
 import Settle from "./pages/Settle";
 import OrderBook from "./components/OrderBook";
 import TermsAndConditions from "./pages/TermsAndConditions";
+import WalletIntegration from "./components/WalletIntegration"; 
+import HowItWorks from "./components/HowItWorks";
 
 const AppContent = () => {
   const location = useLocation();
   const showFooters = location.pathname === "/";
+  const query = new URLSearchParams(location.search); // Moved query parsing here
+  const event_id = query.get("event_id"); // Extract event_id
+  const eventTitle = query.get("eventTitle") || ""; // Extract eventTitle, default to empty string
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-background">
@@ -37,6 +42,11 @@ const AppContent = () => {
           <Route path="/contract/:contract_id" element={<Contract />} />
           <Route path="/order-book" element={<OrderBook />} />
           <Route path="/terms" element={<TermsAndConditions />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route
+            path="/wallet-integration"
+            element={<WalletIntegration event_id={event_id} eventTitle={eventTitle} />}
+          />
           <Route path="*" element={<div className="p-4 text-center">404: Page Not Found</div>} />
         </Routes>
       </main>

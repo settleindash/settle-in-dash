@@ -21,7 +21,7 @@ const Header = () => {
         {/* Logo image for Settle In DASH */}
         <Link to="/" aria-label="Settle In DASH Home">
           <img
-            src="/src/assets/logo.png"
+            src="/src/assets/logo.png" // Changed from 'src/assets/logo.png' to '/src/assets/logo.png'
             alt="Settle In DASH"
             className="h-[50px] w-[50px]"
           />

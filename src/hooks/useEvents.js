@@ -14,7 +14,7 @@ export const useEvents = () => {
     console.log("useEvents: Creating event with data:", eventData);
 
     try {
-      const response = await fetch("https://settleindash.com/api/events.php", {
+      const response = await fetch("https://www.settleindash.com/api/events.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(eventData),
@@ -44,8 +44,10 @@ export const useEvents = () => {
     console.log("useEvents: Fetching events with filters:", filters);
 
     try {
-      const query = new URLSearchParams(filters).toString();
-      const response = await fetch(`https://settleindash.com/api/events.php?${query}`);
+      // Exclude status from query, as filtering is handled by FilterEvents.jsx
+      const { status, ...otherFilters } = filters;
+      const query = new URLSearchParams(otherFilters).toString();
+      const response = await fetch(`https://www.settleindash.com/api/events.php${query ? `?${query}` : ''}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -54,7 +56,7 @@ export const useEvents = () => {
         throw new Error(result.error);
       }
       setEvents(result);
-      console.log("useEvents: Events fetched successfully:", result);
+      console.log("useEvents: Events fetched successfully, count:", result.length);
       return result;
     } catch (err) {
       console.error("useEvents: Error fetching events:", err.message);

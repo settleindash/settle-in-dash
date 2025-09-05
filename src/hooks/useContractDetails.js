@@ -52,33 +52,25 @@ const useContractDetails = (contract_id, contracts = []) => {
     return dateString ? new Date(dateString).toISOString().split("T")[0] : "Not set";
   };
 
-
-
- // Calculate Accepter's Stake
-  const accepterStake = contract?.percentage && contract?.stake && contract?.position_type
-    ? contract.position_type === "buy"
-      ? (Number(contract.stake) * Number(contract.percentage)).toFixed(2)
-      : (Number(contract.stake) / Number(contract.percentage)).toFixed(2)
-    : "0.00";
+  // Calculate Accepter's Stake
+  const accepterStake = contract?.odds && contract?.stake
+    ? (Number(contract.stake) * (Number(contract.odds) - 1)).toFixed(2) // Accepter's stake for "sell" contract
+    : contract?.percentage && contract?.stake // Fallback for legacy contracts
+      ? (Number(contract.stake) / Number(contract.percentage)).toFixed(2)
+      : "0.00";
 
   // Calculate To Win based on outcome and position_type
   const toWin = (outcome = contract?.outcome, positionType = contract?.position_type) => {
-    if (!contract?.stake || !contract?.percentage) return "0.00";
+    if (!contract?.stake || (!contract?.odds && !contract?.percentage)) return "0.00";
 
     const stake = Number(contract.stake);
-    const percentage = Number(contract.percentage);
+    const odds = Number(contract.odds || contract.percentage); // Fallback to percentage for legacy contracts
 
-    // Assume outcome affects the calculation (e.g., "Yes" vs "No" could invert logic in some markets)
-    // For simplicity, we'll base it on position_type as requested
-    if (positionType === "buy") {
-      return stake.toFixed(2); // possiton type buy is not possible anymore maybe i will refactor later
-    } else if (positionType === "sell") {
-      return (stake * percentage).toFixed(2); // remember it is reversed all contracts is sell, which means that contract will be buy for the user that accepts  
+    if (positionType === "sell") {
+      return stake.toFixed(2); // Creator (seller) wins their stake if outcome is false
     }
-    return "0.00"; // Default case
+    return (stake * (odds - 1)).toFixed(2); // Accepter (buyer) wins stake * (odds - 1) if outcome is true
   };
-
-
 
   return {
     contract,

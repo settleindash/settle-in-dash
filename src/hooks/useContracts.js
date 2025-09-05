@@ -1,6 +1,6 @@
 // src/hooks/useContracts.js
 // Custom hook for managing contract-related logic for Settle In DASH.
-// Supports fetching, creating, accepting, settling, and resolving contracts with event-based structure.
+// Supports fetching, creating, accepting, settling, and resolving contracts with event-based structure and blockchain integration.
 
 import { useState, useCallback } from "react";
 
@@ -36,7 +36,7 @@ export const useContracts = () => {
     }
   }, []);
 
-  // Create contract
+  // Create contract with blockchain transaction ID, odds, and multisig address
   const createContract = useCallback(async (contractData) => {
     setLoading(true);
     setError(null);
@@ -45,7 +45,20 @@ export const useContracts = () => {
       const response = await fetch("https://settleindash.com/api/contracts.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(contractData),
+        body: JSON.stringify({
+          ...contractData,
+          transaction_id: contractData.transaction_id,
+          odds: contractData.odds,
+          multisig_address: contractData.multisigAddress, // Explicitly include
+          WalletAddress: contractData.WalletAddress,
+          position_type: contractData.position_type,
+          event_id: contractData.event_id,
+          outcome: contractData.outcome,
+          stake: contractData.stake,
+          acceptanceDeadline: contractData.acceptanceDeadline,
+          additional_contract_creator: contractData.additional_contract_creator,
+          category: contractData.category,
+        }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -64,7 +77,7 @@ export const useContracts = () => {
     }
   }, [fetchContracts]);
 
-  // Accept contract
+  // Accept contract with blockchain transaction ID and odds
   const acceptContract = useCallback(async (contract_id, accepterData) => {
     setLoading(true);
     setError(null);
@@ -73,7 +86,14 @@ export const useContracts = () => {
       const response = await fetch("https://settleindash.com/api/contracts.php", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "accept", contract_id, ...accepterData }),
+        body: JSON.stringify({
+          action: "accept",
+          contract_id,
+          accepterWalletAddress: accepterData.accepterWalletAddress,
+          accepter_stake: accepterData.accepter_stake,
+          accepter_transaction_id: accepterData.transaction_id, // Map to schema field
+          additional_contract_accepter: accepterData.additional_contract_accepter,
+        }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -94,16 +114,24 @@ export const useContracts = () => {
     }
   }, []);
 
-  // Settle contract (submit winner choice)
-  const settleContract = useCallback(async (contract_id, submitterWalletAddress, winnerWalletAddress, reasoning) => {
+  // Settle contract with blockchain transaction IDs for winner payout and fee
+  const settleContract = useCallback(async (contract_id, settlementData) => {
     setLoading(true);
     setError(null);
-    console.log("useContracts: Settling contract:", contract_id, { submitterWalletAddress, winnerWalletAddress, reasoning });
+    console.log("useContracts: Settling contract:", contract_id, settlementData);
     try {
       const response = await fetch("https://settleindash.com/api/contracts.php", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "settle", contract_id, submitterWalletAddress, winnerWalletAddress, reasoning }),
+        body: JSON.stringify({
+          action: "settle",
+          contract_id,
+          outcome: settlementData.outcome,
+          transaction_id: settlementData.transaction_id,
+          fee_transaction_id: settlementData.fee_transaction_id,
+          fee_recipient: settlementData.fee_recipient,
+          accepter_transaction_id: settlementData.accepter_transaction_id, // For ties
+        }),
       });
       const result = await response.json();
       if (!response.ok) {

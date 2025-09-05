@@ -44,18 +44,17 @@ const ContractCard = ({
     }).replace(/(\d+)\/(\d+)\/(\d+)/, "$2/$1/$3");
   };
 
-  // Calculate 2% fee based on position_type
+  // Calculate 2% fee for both parties
   const calculateFee = () => {
-    if (!contract.stake || !contract.percentage) return "Not set";
+    if (!contract.stake || !contract.odds) return { fee: "Not set", creatorFee: "Not set", accepterFee: "Not set" };
     const stake = parseFloat(contract.stake);
-    const odds = parseFloat(contract.percentage);
-    if (contract.position_type === "buy") {
-      console.log("ContractCard: Calculating creator fee (buy):", stake * 0.02);
-      return (stake * 0.02).toFixed(2) + " DASH";
-    } else {
-      console.log("ContractCard: Calculating accepter fee (sell):", stake * (odds - 1) * 0.02);
-      return (stake * (odds - 1) * 0.02).toFixed(2) + " DASH";
-    }
+    const odds = parseFloat(contract.odds);
+    const creatorWinnings = stake;
+    const accepterWinnings = stake * (odds - 1); // Use odds - 1
+    const creatorFee = (creatorWinnings * 0.02).toFixed(2);
+    const accepterFee = accepterWinnings < 0 ? "0.00" : (accepterWinnings * 0.02).toFixed(2);
+    console.log("ContractCard: Creator fee:", creatorFee, "Accepter fee:", accepterFee);
+    return { fee: "Fee:", creatorFee: `Creator: ${creatorFee} DASH`, accepterFee: `Accepter: ${accepterFee} DASH` };
   };
 
   const handleAcceptContract = async () => {
@@ -80,11 +79,12 @@ const ContractCard = ({
       const result = await acceptContract(contract.contract_id, {
         accepterWalletAddress,
         accepter_stake: accepterStake,
+        transaction_id: "tx_placeholder", // Replace with actual blockchain integration
       });
       if (result.success) {
         setMessage("Contract accepted successfully!");
-        if (onAcceptSuccess) onAcceptSuccess(); // Trigger parent refresh
-        setAccepterWalletAddress(""); // Clear input
+        if (onAcceptSuccess) onAcceptSuccess();
+        setAccepterWalletAddress("");
         console.log("ContractCard: Contract accepted successfully, triggering onAcceptSuccess");
       } else {
         setError(result.error || "Failed to accept contract");
@@ -96,23 +96,49 @@ const ContractCard = ({
     }
   };
 
+  // Calculate net winnings
+  const creatorNetWinnings = () => {
+    if (!contract.stake) return "Not set";
+    const stake = parseFloat(contract.stake);
+    return (stake * 0.98).toFixed(2) + " DASH"; // After 2% fee
+  };
+
+  const accepterNetWinnings = () => {
+    if (!contract.stake || !contract.odds) return "Not set";
+    const stake = parseFloat(contract.stake);
+    const odds = parseFloat(contract.odds);
+    const winnings = stake * (odds - 1); // Use odds - 1
+    return (winnings * 0.98).toFixed(2) + " DASH"; // After 2% fee
+  };
+
   return (
     <div className="min-h-screen bg-background p-4">
       {isSingleView && <PageHeader title={eventTitle || "Contract Details"} />}
       <div className={`bg-white p-6 rounded-lg shadow text-sm mb-4 ${isSingleView ? "" : "mt-6"}`}>
-        {/* Financial Summary */}
+        {/* Beta Notice */}
+        <p className="text-gray-600 text-sm mb-4">
+          Note: This is a beta version. Contracts are fictive with no obligations.
+        </p>
+
+        {/* Payouts */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div className="p-4 bg-gray-50 rounded-lg">
-            <h3 className="text-md font-semibold text-gray-700">Financial Overview</h3>
-            <p className="mt-2 text-gray-600">Stake (What You Lose): {contract.stake ? `${contract.stake} DASH` : "Not set"}</p>
-            <p className="mt-2 text-green-600 font-semibold">To Win (If Correct): {toWin(contract.outcome, contract.position_type)} DASH</p>
-            <p className="mt-2 text-gray-600">Buy outcome: {contract.outcome || "Not set"}</p>
+            <h3 className="text-md font-semibold text-gray-700">Payouts</h3>
+            <p className="mt-2 text-gray-600">Stake: {contract.stake ? `${contract.stake} DASH` : "Not set"}</p>
+            <p className="mt-2 text-gray-600">Outcome: {contract.outcome || "Not set"}</p>
+            <p className="mt-2 text-green-600 font-semibold">Creator (Seller) if false: {creatorNetWinnings()}</p>
+            <p className="mt-2 text-green-600 font-semibold">Accepter (Buyer) if true: {accepterNetWinnings()}</p>
           </div>
           <div className="p-4 bg-gray-50 rounded-lg">
             <h3 className="text-md font-semibold text-gray-700">Acceptance Details</h3>
-            <p className="mt-2 text-gray-600">Odds: {contract.percentage || "Not set"}</p>
+            <p className="mt-2 text-gray-600">Odds: {contract.odds ? contract.odds : "Not set"}</p>
             <p className="mt-2 text-gray-600">Acceptance Deadline: {formatCustomDate(contract.acceptanceDeadline)}</p>
-            <p className="mt-2 text-gray-600">Fee (Excludes transaction fees): 2% on net winnings</p>
+            <div className="mt-2 text-gray-600">
+              <p>{calculateFee().fee}</p>
+              <p>{calculateFee().creatorFee}</p>
+              <p>{calculateFee().accepterFee}</p>
+              <p>(Excludes transaction fees)</p>
+            </div>
           </div>
         </div>
 
@@ -121,8 +147,8 @@ const ContractCard = ({
           <h3 className="text-md font-semibold text-gray-700 mb-2">Contract Info</h3>
           <p className="text-gray-600">Contract ID: {contract.contract_id || "Not set"}</p>
           <p className="text-gray-600">Status: {formatStatus(contract.status)}</p>
-          <p className="text-gray-600">Created At: {formatCustomDate(contract.created_at)}</p>
-          <p className="text-gray-600">Event Time: {formatCustomDate(contract.time)}</p>
+          <p className="mt-2 text-gray-600">Created At: {formatCustomDate(contract.created_at)}</p>
+          <p className="mt-2 text-gray-600">Event Time: {formatCustomDate(contract.time)}</p>
         </div>
 
         {/* Parties Involved */}
@@ -130,9 +156,6 @@ const ContractCard = ({
           <h3 className="text-md font-semibold text-gray-700 mb-2">Parties</h3>
           <p className="text-gray-600">Creator Wallet Address: {contract.WalletAddress || "Not set"}</p>
           <p className="text-gray-600">Accepter Wallet Address: {contract.accepterWalletAddress || "Not set"}</p>
-          {contract.status === "accepted" && contract.accepterWalletAddress && (
-            <p className="text-gray-600">Accepter Stake: {contract.accepter_stake ? `${contract.accepter_stake} DASH` : "Not set"}</p>
-          )}
         </div>
 
         {/* Status Messages */}
@@ -142,7 +165,7 @@ const ContractCard = ({
           </p>
         )}
         {contract.status === "accepted" && (
-          <p className="text-green-500 mt-2">This contract has been accepted.</p>
+          <p className="text-green-600 mt-2">This contract has been accepted.</p>
         )}
 
         {/* Collapsible More Info Section */}
@@ -169,7 +192,7 @@ const ContractCard = ({
         </div>
 
         {/* Action Section */}
-        {contract.status === "open" && (
+        {contract.status === "open" ? (
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <h3 className="text-md font-semibold text-gray-700 mb-2">Accept Contract</h3>
             <p className="text-sm text-gray-600 mb-2">Enter your wallet address to accept this peer-to-peer contract (use the same address as creator to cancel).</p>
@@ -184,7 +207,7 @@ const ContractCard = ({
               onChange={(e) => setAccepterWalletAddress(e.target.value)}
               placeholder="Enter a valid DASH address (starts with 'X', 34 characters)"
               aria-label="Accepter wallet address"
-              disabled={contract.status !== "open"} // Disable input after acceptance
+              disabled={contract.status !== "open"}
             />
             {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
             {message && <p className="text-green-500 text-sm mt-2">{message}</p>}
@@ -192,11 +215,13 @@ const ContractCard = ({
               className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-4 text-sm w-full"
               onClick={handleAcceptContract}
               aria-label={`Accept ${contract.position_type} contract ${contract.contract_id}`}
-              disabled={contractsLoading || contract.status !== "open"} // Disable button after acceptance
+              disabled={contractsLoading || contract.status !== "open"}
             >
               {contractsLoading ? "Processing..." : contract.position_type === "buy" ? "Sell (Lay)" : "Buy (Back)"} Contract
             </button>
           </div>
+        ) : (
+          <p className="text-gray-600 mt-6">This contract is no longer available for acceptance.</p>
         )}
       </div>
     </div>

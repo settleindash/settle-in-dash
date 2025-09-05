@@ -1,11 +1,11 @@
 // src/pages/Marketplace.jsx
 // Displays open events with filtering and sorting via FilterEvents component.
 
-import React, { useEffect, useCallback, useState } from "react"; // Explicit React import
+import React, { useEffect, useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useEvents } from "../hooks/useEvents";
 import PageHeader from "../utils/formats/PageHeader.jsx";
-import FilterEvents from "../components/FilterEvents.jsx"; // Import FilterEvents
+import FilterEvents from "../components/FilterEvents.jsx";
 
 const Marketplace = () => {
   const { events, getEvents, loading: eventsLoading, error: eventsError } = useEvents();
@@ -25,31 +25,31 @@ const Marketplace = () => {
     }
   }, []);
 
-  // Fetch open events
+  // Fetch all events
   const fetchData = useCallback(async () => {
+    if (hasFetched) return; // Prevent re-fetching
     console.log("Marketplace: Fetching events at", new Date().toLocaleString("en-GB", { timeZone: "Europe/Paris" }));
     try {
-      await getEvents({ status: "open" });
+      await getEvents(); // No status filter, as FilterEvents.jsx handles it
       console.log("Marketplace: Events fetched, count:", events?.length || 0);
+      setHasFetched(true);
     } catch (error) {
       console.error("Marketplace: Failed to fetch events:", error);
+      setHasFetched(true); // Set even on error to prevent retry loops
     }
-    setHasFetched(true);
-  }, [getEvents]);
+  }, [getEvents, hasFetched]); // Add hasFetched to dependencies
 
-  // Fetch data
+  // Fetch data on mount
   useEffect(() => {
-    if (!hasFetched) {
-      fetchData();
-    }
-  }, [fetchData, hasFetched]);
+    fetchData();
+  }, [fetchData]);
 
   // Debug events changes
   useEffect(() => {
     console.log("Marketplace: Events updated, count:", events?.length || 0);
   }, [events]);
 
-  // Render event cards (moved to a separate function to pass to FilterEvents)
+  // Render event cards
   const renderContent = useCallback(
     (filteredEvents) => {
       if (!filteredEvents || filteredEvents.length === 0) {
@@ -110,24 +110,16 @@ const Marketplace = () => {
           <div>Loading marketplace...</div>
         ) : eventsError ? (
           <p className="text-red-500 text-sm">Error: {eventsError}</p>
+        ) : !hasFetched ? (
+          <div>Loading marketplace...</div> // Show loading until fetch completes
         ) : (
-          <React.Fragment>
-            {(() => {
-              try {
-                return (
-                  <FilterEvents
-                    events={events}
-                    renderContent={renderContent}
-                    showFilters={true}
-                    eventsPerPage={20}
-                  />
-                );
-              } catch (error) {
-                console.error("Marketplace: Render error:", error);
-                return <p className="text-red-500 text-sm">Error rendering events: {error.message}</p>;
-              }
-            })()}
-          </React.Fragment>
+          <FilterEvents
+            events={events || []}
+            renderContent={renderContent}
+            showFilters={true}
+            eventsPerPage={20}
+            includePastEvents={false} // Control past events filtering
+          />
         )}
       </main>
     </div>
