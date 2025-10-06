@@ -1,6 +1,3 @@
-// src/pages/Marketplace.jsx
-// Displays open events with filtering and sorting via FilterEvents component.
-
 import React, { useEffect, useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useEvents } from "../hooks/useEvents";
@@ -14,11 +11,22 @@ const Marketplace = () => {
 
   // Parse possible_outcomes with error handling
   const parseOutcomes = useCallback((outcomes) => {
-    if (!outcomes) return [];
+    if (!outcomes) {
+      console.warn("Marketplace: No outcomes provided");
+      return [];
+    }
     try {
-      return typeof outcomes === "string"
-        ? JSON.parse(outcomes) || outcomes.split(",").map((o) => o.trim())
-        : outcomes;
+      if (typeof outcomes === "string") {
+        const decoded = JSON.parse(outcomes);
+        if (Array.isArray(decoded)) {
+          return decoded;
+        }
+        return outcomes.split(",").map((o) => o.trim());
+      } else if (Array.isArray(outcomes)) {
+        return outcomes;
+      }
+      console.warn("Marketplace: Unexpected outcomes format:", outcomes);
+      return [];
     } catch (error) {
       console.error("Marketplace: Failed to parse outcomes:", outcomes, error);
       return typeof outcomes === "string" ? outcomes.split(",").map((o) => o.trim()) : [];
@@ -27,17 +35,17 @@ const Marketplace = () => {
 
   // Fetch all events
   const fetchData = useCallback(async () => {
-    if (hasFetched) return; // Prevent re-fetching
+    if (hasFetched) return;
     console.log("Marketplace: Fetching events at", new Date().toLocaleString("en-GB", { timeZone: "Europe/Paris" }));
     try {
-      await getEvents(); // No status filter, as FilterEvents.jsx handles it
+      await getEvents({ status: "open" });
       console.log("Marketplace: Events fetched, count:", events?.length || 0);
       setHasFetched(true);
     } catch (error) {
       console.error("Marketplace: Failed to fetch events:", error);
-      setHasFetched(true); // Set even on error to prevent retry loops
+      setHasFetched(true);
     }
-  }, [getEvents, hasFetched]); // Add hasFetched to dependencies
+  }, [getEvents, hasFetched]);
 
   // Fetch data on mount
   useEffect(() => {
@@ -46,15 +54,17 @@ const Marketplace = () => {
 
   // Debug events changes
   useEffect(() => {
-    console.log("Marketplace: Events updated, count:", events?.length || 0);
+    console.log("Marketplace: Events updated:", events);
   }, [events]);
 
   // Render event cards
   const renderContent = useCallback(
     (filteredEvents) => {
       if (!filteredEvents || filteredEvents.length === 0) {
+        console.log("Marketplace: No filtered events to render");
         return <p className="text-gray-600 text-sm sm:text-base">No upcoming events available.</p>;
       }
+      console.log("Marketplace: Rendering filtered events, count:", filteredEvents.length);
       return (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mt-6">
           {filteredEvents.map((event) => {
@@ -70,7 +80,8 @@ const Marketplace = () => {
                     timeStyle: "short",
                   })}
                 </p>
-                <p className="text-gray-600 text-sm mb-4">Category: {event.category || "N/A"}</p>
+                <p className="text-gray-600 text-sm mb-2">Category: {event.category || "N/A"}</p>
+                <p className="text-gray-600 text-sm mb-4">Event ID: {event.event_id}</p>
                 {outcomes.length > 0 ? (
                   <div className="space-y-4">
                     {outcomes.map((outcome) => (
@@ -78,13 +89,13 @@ const Marketplace = () => {
                         key={outcome}
                         onClick={() =>
                           navigate(
-                            `/order-book?event_id=${event.event_id}&outcome=${encodeURIComponent(outcome)}&position_type=buy`
+                            `/create-contract?event_id=${event.event_id}&outcome=${encodeURIComponent(outcome)}`
                           )
                         }
                         className="bg-blue-500 text-white w-full px-3 py-1 rounded text-sm hover:bg-blue-600"
-                        aria-label={`Buy ${outcome} for ${title}`}
+                        aria-label={`Create contract for ${outcome} in ${title}`}
                       >
-                        {outcome}
+                        Create Contract for {outcome}
                       </button>
                     ))}
                   </div>
@@ -111,14 +122,14 @@ const Marketplace = () => {
         ) : eventsError ? (
           <p className="text-red-500 text-sm">Error: {eventsError}</p>
         ) : !hasFetched ? (
-          <div>Loading marketplace...</div> // Show loading until fetch completes
+          <div>Loading marketplace...</div>
         ) : (
           <FilterEvents
             events={events || []}
             renderContent={renderContent}
             showFilters={true}
             eventsPerPage={20}
-            includePastEvents={false} // Control past events filtering
+            includePastEvents={false}
           />
         )}
       </main>

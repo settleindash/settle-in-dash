@@ -1,15 +1,13 @@
 // src/components/FilterEvents.jsx
-// Component to filter and sort events, showing only upcoming events.
-
 import { useState, useMemo, useCallback } from "react";
 import { categories } from "../utils/categories";
 
 const FilterEvents = ({
   events,
-  onFilterChange,
-  eventsPerPage = 20,
   renderContent,
   showFilters = true,
+  eventsPerPage = 20,
+  includePastEvents = false,
 }) => {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -28,11 +26,15 @@ const FilterEvents = ({
     console.log("FilterEvents: Recalculating filteredEvents, events count:", events?.length || 0);
     return (events || [])
       .filter((e) => {
+        if (!e.event_id || !e.event_date) {
+          console.warn("FilterEvents: Event missing event_id or event_date:", e);
+          return false;
+        }
         const matchesSearch = (e.title || "").toLowerCase().includes(search.toLowerCase());
         const matchesCategory = !categoryFilter || e.category === categoryFilter;
         const eventDate = new Date(e.event_date);
-        const isUpcoming = !isNaN(eventDate.getTime()) && eventDate > now;
-        if (!isUpcoming && e.event_date) {
+        const isUpcoming = includePastEvents || (!isNaN(eventDate.getTime()) && eventDate > now);
+        if (!isUpcoming) {
           console.log("FilterEvents: Excluded event due to past/invalid event date:", {
             event_id: e.event_id,
             title: e.title,
@@ -49,7 +51,7 @@ const FilterEvents = ({
           const dateA = new Date(a.event_date);
           const dateB = new Date(b.event_date);
           if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
-            console.log("FilterEvents: Invalid date detected:", {
+            console.warn("FilterEvents: Invalid date detected:", {
               event_id_A: a.event_id,
               event_date_A: a.event_date,
               event_id_B: b.event_id,
@@ -65,7 +67,7 @@ const FilterEvents = ({
           ? String(valueA).localeCompare(String(valueB))
           : String(valueB).localeCompare(String(valueA));
       });
-  }, [events, search, categoryFilter, sortBy]);
+  }, [events, search, categoryFilter, sortBy, includePastEvents, now]);
 
   const paginatedEvents = useMemo(() => {
     return filteredEvents.slice((page - 1) * eventsPerPage, page * eventsPerPage);
@@ -171,45 +173,7 @@ const FilterEvents = ({
           </div>
         </div>
       )}
-      {renderContent ? (
-        renderContent(paginatedEvents)
-      ) : paginatedEvents.length === 0 ? (
-        <p className="text-center text-gray-500 mt-6">No upcoming events found.</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mt-6">
-          {paginatedEvents.map((event) => (
-            <div key={event.event_id} className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-base font-semibold mb-4">{event.title || "Event"}</h2>
-              <p className="text-gray-600 text-sm mb-2">
-                Date: {new Date(event.event_date).toLocaleString("en-GB", {
-                  timeZone: "Europe/Paris",
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </p>
-              <p className="text-gray-600 text-sm mb-4">Category: {event.category || "N/A"}</p>
-              <div className="space-y-4">
-                {event.possible_outcomes &&
-                  (typeof event.possible_outcomes === "string"
-                    ? JSON.parse(event.possible_outcomes)
-                    : event.possible_outcomes
-                  ).map((outcome) => (
-                    <button
-                      key={outcome}
-                      onClick={() =>
-                        window.location.href = `/order-book?event_id=${event.event_id}&outcome=${encodeURIComponent(outcome)}&position_type=buy`
-                      }
-                      className="bg-blue-500 text-white w-full px-3 py-1 rounded text-sm hover:bg-blue-600"
-                      aria-label={`Buy ${outcome} for ${event.title || "Event"}`}
-                    >
-                      {outcome}
-                    </button>
-                  ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {renderContent(paginatedEvents)}
       {filteredEvents.length > eventsPerPage && (
         <div className="mt-6 flex justify-center gap-4">
           <button

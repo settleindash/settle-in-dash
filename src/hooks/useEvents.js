@@ -1,6 +1,3 @@
-// src/hooks/useEvents.js
-// Custom hook to handle event-related API calls for Settle In DASH.
-
 import { useState, useCallback } from "react";
 
 export const useEvents = () => {
@@ -8,35 +5,50 @@ export const useEvents = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const API_BASE_URL = "https://settleindash.com/api";
+
   const createEvent = useCallback(async (eventData) => {
     setLoading(true);
     setError(null);
     console.log("useEvents: Creating event with data:", eventData);
 
     try {
-      const response = await fetch("https://www.settleindash.com/api/events.php", {
+      const payload = {
+        api_key: "2edae9de6810a6d00fe0c6ff9fd3c40869d7c70b9ff7fef72aaf816dad8a9f2d",
+        action: "create_event",
+        data: {
+          title: eventData.title || "",
+          category: eventData.category || "",
+          event_date: eventData.event_date || "",
+          possible_outcomes: eventData.possible_outcomes || [],
+          oracle_source: eventData.oracle_source || "",
+          event_wallet_address: eventData.event_wallet_address || "",
+          signature: eventData.signature || "",
+        },
+      };
+      console.log("useEvents: createEvent request:", JSON.stringify(payload));
+      const response = await fetch(`${API_BASE_URL}/events.php`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(eventData),
+        body: JSON.stringify(payload),
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      console.log("useEvents: createEvent response status:", response.status);
       const result = await response.json();
-      if (result.error) {
-        throw new Error(result.error);
+      console.log("useEvents: createEvent response:", result);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create event");
       }
-      console.log("useEvents: Event created successfully:", result);
-      return result;
+      console.log("useEvents: Event created successfully, event_id:", result.event_id);
+      setEvents([...events, { ...eventData, id: result.event_id }]);
+      return { success: true, event_id: result.event_id };
     } catch (err) {
       console.error("useEvents: Error creating event:", err.message);
-      setError(err.message);
-      return { error: err.message };
+      setError(err.message || "Failed to create event. Please try again.");
+      return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [events]);
 
   const getEvents = useCallback(async (filters = {}) => {
     setLoading(true);
@@ -44,24 +56,32 @@ export const useEvents = () => {
     console.log("useEvents: Fetching events with filters:", filters);
 
     try {
-      // Exclude status from query, as filtering is handled by FilterEvents.jsx
-      const { status, ...otherFilters } = filters;
-      const query = new URLSearchParams(otherFilters).toString();
-      const response = await fetch(`https://www.settleindash.com/api/events.php${query ? `?${query}` : ''}`);
+      const query = new URLSearchParams({
+        action: "get_events",
+        status: filters.status || "open",
+      });
+      const url = `${API_BASE_URL}/events.php?${query.toString()}`;
+      console.log("useEvents: getEvents request:", url);
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+      console.log("useEvents: getEvents response status:", response.status);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const result = await response.json();
-      if (result.error) {
-        throw new Error(result.error);
+      console.log("useEvents: getEvents response:", result);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch events");
       }
-      setEvents(result);
-      console.log("useEvents: Events fetched successfully, count:", result.length);
-      return result;
+      setEvents(result.data || []);
+      console.log("useEvents: Events fetched successfully, count:", result.data?.length || 0);
+      return result.data || [];
     } catch (err) {
       console.error("useEvents: Error fetching events:", err.message);
-      setError(err.message);
-      return { error: err.message };
+      setError(err.message || "Failed to fetch events. Please try again.");
+      return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }

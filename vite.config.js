@@ -44,8 +44,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'dashcore-lib': ['@dashevo/dashcore-lib'],
-          dash: ['dash'],
           'html5-qrcode': ['html5-qrcode'],
           qrcode: ['qrcode'],
         },
@@ -55,7 +53,7 @@ export default defineConfig({
     terserOptions: {
       keep_fnames: true, // Keeps function names
       mangle: {
-        reserved: ['dashcore'], // Prevents 'dashcore' from being minified
+        reserved: [], // Removed dashcore-related names
       },
     },
     chunkSizeWarningLimit: 2000,
@@ -70,15 +68,15 @@ export default defineConfig({
       'process',
       'events',
       'path-browserify',
-      '@dashevo/dashcore-lib',
-      'dash',
       'html5-qrcode',
       'qrcode',
+      'bn.js',
+      'elliptic',
     ],
   },
   server: {
     headers: {
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-eval'",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-eval'; connect-src 'self' https://insight.dashtest.net",
     },
   },
 });

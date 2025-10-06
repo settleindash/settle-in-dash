@@ -1,83 +1,322 @@
-// src/components/HowItWorks.jsx
-import React from "react";
+import React, { useState } from "react";
 import PageHeader from "../utils/formats/PageHeader.jsx";
+import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline"; // Requires @heroicons/react
 
 const HowItWorks = () => {
+  const [openSections, setOpenSections] = useState({
+    requirements: false, // New section
+    signing: false,
+    locking: false,
+    creating: false,
+    checking: false,
+  });
+
+  const toggleSection = (section) => {
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
   return (
     <div className="min-h-screen bg-background p-4">
       <PageHeader title="How It Works" />
       <main className="max-w-3xl mx-auto mt-6">
         <div className="bg-white p-6 rounded-lg shadow space-y-6">
-          <section>
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">What Happens When You Sign the Wallet Address?</h2>
-            <ol className="list-decimal list-inside text-sm text-gray-600 space-y-2">
-              <li>
-                <strong>Input and QR Code Generation:</strong> Enter your Dash testnet address (e.g., 
-                <code>yMWxTE3ARahFMMZobLCaYoVhmTFgcNwRoP</code>) and click "Connect Wallet". A QR code is generated and displayed. The QR code contains the message to sign, which is:
-                <div className="mt-2 p-2 bg-gray-100 rounded">
-                  <code>SettleInDash:&lt;your_address&gt;</code>
-                </div>
-                For example, if your address is <code>yMWxTE3ARahFMMZobLCaYoVhmTFgcNwRoP</code>, the message to sign is <code>SettleInDash:yMWxTE3ARahFMMZobLCaYoVhmTFgcNwRoP</code>. Copy this exact message (without "message") into the signing tool.
-              </li>
-              <li>
-                <strong>Signing the Message:</strong> Scan the QR code with a Dash wallet (e.g., Dash Core on desktop, as the iPhone Dash Wallet doesn’t support signing). In Dash Core, import your wallet’s 12-word recovery phrase, go to <code>Tools &gt; Sign Message</code>, enter the address and the message (e.g., <code>SettleInDash:yMWxTE3ARahFMMZobLCaYoVhmTFgcNwRoP</code>), and generate a signature. Copy the signature and paste it into the manual input field, then click "Verify Manual Signature".
-              </li>
-              <li>
-                <strong>Verification:</strong> The system verifies the signature using cryptographic methods to confirm you control the wallet. If successful, the UI shows "Wallet successfully connected and signed!".
-              </li>
-            </ol>
-            <p className="text-sm text-gray-600 mt-2">This step ensures only the wallet owner can create a contract, adding security.</p>
+          <p className="text-gray-600 text-sm mb-4">
+            Welcome to Settle In Dash! Learn how to create and accept events and contracts on our testnet platform, where you can practice without using real funds.
+          </p>
+
+          {/* What You Need for Signing */}
+          <section className="border-b border-gray-200 pb-4">
+            <button
+              className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
+              onClick={() => toggleSection("requirements")}
+            >
+              <span className="mr-2">
+                {openSections.requirements ? (
+                  <ChevronUpIcon className="w-5 h-5" />
+                ) : (
+                  <ChevronDownIcon className="w-5 h-5" />
+                )}
+              </span>
+              What You Need for Signing
+            </button>
+            {openSections.requirements && (
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>
+                  To create or accept events and contracts, you need a Dash testnet wallet to sign messages, proving you own the wallet. Here’s what you’ll need:
+                </p>
+                <ul className="list-disc list-inside space-y-2">
+                  <li>
+                    <strong>A Dash Testnet Wallet Address:</strong> Your wallet address must start with 'y' and be 26–35 characters long (e.g.,{" "}
+                    <code className="bg-gray-100 p-1 rounded">yMWxTE3ARahFMMZobLCaYoVhmTFgcNwRoP</code>). This is for testing on the Dash testnet, not real funds.
+                    <span className="ml-1 text-blue-500 cursor-help" title="A testnet wallet is used for practice on the Dash testnet, with no real money involved.">
+                      [?]
+                    </span>
+                  </li>
+                  <li>
+                    <strong>Dash Core (Desktop):</strong> Download the Dash Core software for Windows, macOS, or Linux from{" "}
+                    <a
+                      href="https://www.dash.org/downloads/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:underline"
+                    >
+                      dash.org
+                    </a>. Use it to sign messages and manage your testnet wallet.
+                  </li>
+                  <li>
+                    <strong>Dash Wallet for Android:</strong> Install the Dash Wallet app from{" "}
+                    <a
+                      href="https://play.google.com/store/apps/details?id=org.dash.wallet"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:underline"
+                    >
+                      Google Play
+                    </a>. It supports signing messages for testnet wallets.
+                  </li>
+                  <li>
+                    <strong>Note for iPhone Users:</strong> The Dash Wallet for iPhone does not currently support signing messages. Use Dash Core or an Android device instead.
+                  </li>
+                  <li>
+                    <strong>Testnet DASH:</strong> You’ll need testnet DASH to create or accept contracts. Get free testnet DASH from{" "}
+                    <a
+                      href="https://testnet-faucet.dash.org/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:underline"
+                    >
+                      testnet-faucet.dash.org
+                    </a>.
+                  </li>
+                </ul>
+                <p className="mt-2">
+                  <strong>Tip:</strong> Set up Dash Core in testnet mode by adding <code>testnet=1</code> to your <code>dash.conf</code> file. See the{" "}
+                  <a
+                    href="https://docs.dash.org/en/stable/wallets/dashcore/testnet.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:underline"
+                  >
+                    Dash documentation
+                  </a>{" "}
+                  for details.
+                </p>
+              </div>
+            )}
           </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">How Are Funds Locked and When Are They Transferred to the Multisig Wallet?</h2>
-            <ol className="list-decimal list-inside text-sm text-gray-600 space-y-2">
-              <li>
-                <strong>Contract Creation Initiation:</strong> After signing the wallet and filling out the contract form (event, outcome, stake, odds, acceptance deadline), click "Create Contract". A multisig address is generated, requiring agreement from the creator, accepter, and oracle.
-              </li>
-              <li>
-                <strong>Transaction Preparation:</strong> You’re prompted to enter UTXO details (txid, output index, amount in DASH) from your wallet. A transaction is created to send the total amount (e.g., stake + 10% additional) to the multisig address, with change returned to your wallet.
-              </li>
-              <li>
-                <strong>Signing and Broadcasting:</strong> A QR code with the raw transaction hex is displayed. Scan it with Dash Core to sign the transaction, then scan the signed transaction QR code (or use manual input) to broadcast it to the Dash testnet. Funds are locked in the multisig address upon confirmation.
-              </li>
-              <li>
-                <strong>Timing of Transfer:</strong> Funds are transferred and locked immediately after the transaction is confirmed on the blockchain (within a few minutes on testnet).
-              </li>
-            </ol>
-            <p className="text-sm text-gray-600 mt-2">The multisig wallet prevents unilateral spending, requiring at least two of the three parties to agree later.</p>
+          {/* Connecting Your Wallet */}
+          <section className="border-b border-gray-200 pb-4">
+            <button
+              className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
+              onClick={() => toggleSection("signing")}
+            >
+              <span className="mr-2">
+                {openSections.signing ? (
+                  <ChevronUpIcon className="w-5 h-5" />
+                ) : (
+                  <ChevronDownIcon className="w-5 h-5" />
+                )}
+              </span>
+              Connecting Your Wallet
+            </button>
+            {openSections.signing && (
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>
+                  To create or accept a contract, you need to connect a Dash testnet wallet. This proves you own the wallet without sharing private information.
+                </p>
+                <ol className="list-decimal list-inside space-y-2">
+                  <li>
+                    <strong>Enter Your Wallet Address:</strong> In the form, input your Dash testnet address, which starts with 'y' (e.g.,{" "}
+                    <code className="bg-gray-100 p-1 rounded">yMWxTE3ARahFMMZobLCaYoVhmTFgcNwRoP</code>). Testnet addresses are for practice only.
+                    <span className="ml-1 text-blue-500 cursor-help" title="A testnet address is used for testing on the Dash testnet, not real funds.">
+                      [?]
+                    </span>
+                  </li>
+                  <li>
+                    <strong>Generate a Signature:</strong> Click "Sign with QR Code" to create a QR code for the message{" "}
+                    <code className="bg-gray-100 p-1 rounded">SettleInDash:&lt;your_address&gt;</code>. For example, if your address is{" "}
+                    <code className="bg-gray-100 p-1 rounded">yMWxTE3ARahFMMZobLCaYoVhmTFgcNwRoP</code>, the message is{" "}
+                    <code className="bg-gray-100 p-1 rounded">SettleInDash:yMWxTE3ARahFMMZobLCaYoVhmTFgcNwRoP</code>.
+                  </li>
+                  <li>
+                    <strong>Sign with Dash Wallet:</strong> Use Dash Core or the Android Dash Wallet. In Dash Core, import your wallet’s 12-word recovery phrase, go to <strong>Tools &gt; Sign Message</strong>, paste the message, and generate a signature.
+                  </li>
+                  <li>
+                    <strong>Verify the Signature:</strong> Scan the QR code with your wallet to get the signature, or copy it manually. Paste the signature into the manual input field and click "Verify Manual Signature". If valid, you’ll see "Wallet successfully connected and signed!".
+                  </li>
+                </ol>
+                <p className="mt-2">
+                  <strong>Tip:</strong> Need testnet DASH? Get some from{" "}
+                  <a
+                    href="https://testnet-faucet.dash.org/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:underline"
+                  >
+                    testnet-faucet.dash.org
+                  </a>.
+                </p>
+              </div>
+            )}
           </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">When Can You Press the 'Create Contract' Button, and Does It Involve a Fund Transfer?</h2>
-            <ol className="list-decimal list-inside text-sm text-gray-600 space-y-2">
-              <li>
-                <strong>When You Can Press:</strong> The button is enabled when a valid event is selected, all form fields (outcome, position type, stake, odds, acceptance deadline) pass validation, and the wallet is successfully signed.
-              </li>
-              <li>
-                <strong>Fund Transfer Involvement:</strong> Pressing the button initiates the process by generating the multisig address and preparing the transaction. It prompts you for UTXO details and displays a QR code. Funds are transferred only after you sign and broadcast the transaction, not immediately upon clicking.
-              </li>
-            </ol>
-            <p className="text-sm text-gray-600 mt-2">This two-step process gives you control to review and confirm the fund lock.</p>
+          {/* Locking Funds */}
+          <section className="border-b border-gray-200 pb-4">
+            <button
+              className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
+              onClick={() => toggleSection("locking")}
+            >
+              <span className="mr-2">
+                {openSections.locking ? (
+                  <ChevronUpIcon className="w-5 h-5" />
+                ) : (
+                  <ChevronDownIcon className="w-5 h-5" />
+                )}
+              </span>
+              Locking Funds in a Contract
+            </button>
+            {openSections.locking && (
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>
+                  When you create or accept a contract, your testnet DASH is locked in a secure shared wallet (like a joint bank account) to ensure fairness.
+                </p>
+                <ol className="list-decimal list-inside space-y-2">
+                  <li>
+                    <strong>Create the Contract:</strong> Fill out the contract form (event, outcome, stake, odds, deadline) and connect your wallet as above.
+                  </li>
+                  <li>
+                    <strong>Provide Wallet Funds:</strong> Enter details about available funds in your wallet (transaction ID, output number, and amount). This information comes from Dash Core’s <strong>Wallet &gt; Transactions</strong> or the <code>listunspent</code> command.
+                  </li>
+                  <li>
+                    <strong>Sign the Transaction:</strong> A QR code is generated for the transaction to lock your funds in a secure shared wallet. Scan it with Dash Core or the Android Dash Wallet to sign, then scan or enter the signed transaction to send it to the testnet. This happens within minutes.
+                  </li>
+                  <li>
+                    <strong>Secure Shared Wallet:</strong> The funds are locked in a shared wallet that requires agreement from you, the other party, and a trusted oracle to release them later.
+                  </li>
+                </ol>
+                <p className="mt-2">
+                  <strong>Tip:</strong> If the contract isn’t accepted by the deadline, you can use the refund transaction ID to reclaim your funds.
+                </p>
+              </div>
+            )}
           </section>
 
+          {/* Creating a Contract */}
+          <section className="border-b border-gray-200 pb-4">
+            <button
+              className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
+              onClick={() => toggleSection("creating")}
+            >
+              <span className="mr-2">
+                {openSections.creating ? (
+                  <ChevronUpIcon className="w-5 h-5" />
+                ) : (
+                  <ChevronDownIcon className="w-5 h-5" />
+                )}
+              </span>
+              Creating a Contract
+            </button>
+            {openSections.creating && (
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>
+                  Creating a contract lets you offer a bet on an event’s outcome, which others can accept.
+                </p>
+                <ol className="list-decimal list-inside space-y-2">
+                  <li>
+                    <strong>Connect Your Wallet:</strong> Follow the steps in “Connecting Your Wallet” to sign in with your testnet address.
+                  </li>
+                  <li>
+                    <strong>Fill Out the Form:</strong> Choose an event, select an outcome, set your stake (amount of testnet DASH), odds (e.g., 2.00 for 2:1), and an acceptance deadline (before the event).
+                  </li>
+                  <li>
+                    <strong>Submit and Lock Funds:</strong> Click “Create Contract” to generate a secure shared wallet and transaction. You’ll need to provide wallet fund details and sign the transaction to lock your stake.
+                  </li>
+                  <li>
+                    <strong>Wait for Acceptance:</strong> The contract is listed in the marketplace. If someone accepts it, their funds are also locked. If not accepted by the deadline, you can reclaim your funds.
+                  </li>
+                </ol>
+                <p className="mt-2">
+                  <strong>Tip:</strong> Ensure your deadline is realistic to give others time to accept your contract.
+                </p>
+              </div>
+            )}
+          </section>
+
+          {/* Checking Funds */}
+          <section className="border-b border-gray-200 pb-4">
+            <button
+              className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
+              onClick={() => toggleSection("checking")}
+            >
+              <span className="mr-2">
+                {openSections.checking ? (
+                  <ChevronUpIcon className="w-5 h-5" />
+                ) : (
+                  <ChevronDownIcon className="w-5 h-5" />
+                )}
+              </span>
+              Checking Locked Funds
+            </button>
+            {openSections.checking && (
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>
+                  You can verify that funds are safely locked in the shared wallet using the Dash testnet.
+                </p>
+                <ol className="list-decimal list-inside space-y-2">
+                  <li>
+                    <strong>Check Available Funds:</strong> Before locking, use Dash Core’s <strong>Wallet &gt; Transactions</strong> or <code>listunspent</code> to confirm you have enough testnet DASH.
+                  </li>
+                  <li>
+                    <strong>Verify Locked Funds:</strong> After locking, note the shared wallet address and transaction ID from the contract details. Check them on a testnet block explorer like{" "}
+                    <a
+                      href="https://testnet-insight.dash.org/insight/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:underline"
+                    >
+                      testnet-insight.dash.org
+                    </a>.
+                  </li>
+                  <li>
+                    <strong>Confirm Transaction:</strong> Look up the transaction ID on the block explorer to see the funds moved to the shared wallet.
+                  </li>
+                </ol>
+                <p className="mt-2">
+                  <strong>Tip:</strong> If you see errors like “insufficient funds,” ensure your wallet has enough testnet DASH from a faucet.
+                </p>
+              </div>
+            )}
+          </section>
+
+          {/* Troubleshooting Tips */}
           <section>
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">How Do We Check That There Are Funds?</h2>
-            <ol className="list-decimal list-inside text-sm text-gray-600 space-y-2">
+            <h2 className="text-lg font-semibold text-gray-700 mb-4">Troubleshooting Tips</h2>
+            <ul className="list-disc list-inside text-sm text-gray-600 space-y-2">
               <li>
-                <strong>Before Locking:</strong> In Dash Core, use the <code>listunspent</code> command to check available UTXOs and confirm the entered UTXO has enough DASH.
+                <strong>Invalid Wallet Address:</strong> Ensure your address starts with 'y' and is 26–35 characters long. Only testnet addresses are supported.
               </li>
               <li>
-                <strong>After Locking:</strong> Note the multisig address from logs or database. Use a Dash testnet block explorer (e.g., <a href="https://insight.dashtest.net" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">insight.dashtest.net</a>) or Dash Core’s <code>getreceivedbyaddress</code> to verify the locked amount in the multisig address.
+                <strong>Invalid Signature:</strong> Double-check the message you signed matches <code>SettleInDash:&lt;your_address&gt;</code> exactly. Use Dash Core or Android Dash Wallet’s signing tool.
               </li>
               <li>
-                <strong>Transaction Confirmation:</strong> Check the transaction ID (txid) from the broadcast on the block explorer to confirm funds moved to the multisig address.
+                <strong>Insufficient Funds:</strong> Get more testnet DASH from{" "}
+                <a
+                  href="https://testnet-faucet.dash.org/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:underline"
+                >
+                  testnet-faucet.dash.org
+                </a>.
               </li>
               <li>
-                <strong>Database Check:</strong> If logged, query the database for the <code>multisig_address</code> and <code>transaction_id</code> to match blockchain data.
+                <strong>QR Code Issues:</strong> Ensure your Dash Core or Android Dash Wallet is in testnet mode (add <code>testnet=1</code> to <code>dash.conf</code> for Dash Core). Try manual signature input if scanning fails.
               </li>
-            </ol>
-            <p className="text-sm text-gray-600 mt-2">This ensures funds are present and traceable on the testnet.</p>
+              <li>
+                <strong>iPhone Users:</strong> The iPhone Dash Wallet doesn’t support signing. Use Dash Core on a computer or the Android Dash Wallet instead.
+              </li>
+            </ul>
           </section>
         </div>
       </main>
