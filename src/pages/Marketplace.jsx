@@ -1,5 +1,6 @@
+// src/components/Marketplace.jsx
 import React, { useEffect, useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useEvents } from "../hooks/useEvents";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 import FilterEvents from "../components/FilterEvents.jsx";
@@ -72,7 +73,15 @@ const Marketplace = () => {
             const outcomes = parseOutcomes(event.possible_outcomes);
             return (
               <div key={event.event_id} className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-base font-semibold mb-4">{title}</h2>
+                <h2 className="text-base font-semibold mb-4">
+                  <Link
+                    to={`/orderbook?event_id=${event.event_id}`}
+                    className="text-blue-500 hover:underline"
+                    aria-label={`View order book for ${title}`}
+                  >
+                    {title}
+                  </Link>
+                </h2>
                 <p className="text-gray-600 text-sm mb-2">
                   Date: {new Date(event.event_date).toLocaleString("en-GB", {
                     timeZone: "Europe/Paris",
@@ -87,11 +96,12 @@ const Marketplace = () => {
                     {outcomes.map((outcome) => (
                       <button
                         key={outcome}
-                        onClick={() =>
+                        onClick={() => {
+                          console.log("Marketplace: Navigating to create-contract for event:", event.event_id, "outcome:", outcome);
                           navigate(
                             `/create-contract?event_id=${event.event_id}&outcome=${encodeURIComponent(outcome)}`
-                          )
-                        }
+                          );
+                        }}
                         className="bg-blue-500 text-white w-full px-3 py-1 rounded text-sm hover:bg-blue-600"
                         aria-label={`Create contract for ${outcome} in ${title}`}
                       >

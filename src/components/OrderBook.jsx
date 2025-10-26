@@ -20,15 +20,15 @@ const OrderBook = () => {
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState(""); // State for event date
 
-  // Fetch contracts and event details
+  // Fetch contracts for the event
   useEffect(() => {
-    console.log("OrderBook: useEffect triggered, event_id:", event_id, "contracts:", contracts);
     if (event_id) {
+      console.log("OrderBook: Fetching contracts for event_id:", event_id);
       fetchContracts({ event_id, status: "open" });
     } else {
       console.log("OrderBook: No event_id found in URL");
     }
-  }, [event_id, fetchContracts]);
+  }, [event_id]); // Removed fetchContracts from dependencies
 
   // Fetch event title and date
   useEffect(() => {

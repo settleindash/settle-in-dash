@@ -40,7 +40,7 @@ const AppContent = () => {
           <Route path="/create-event" element={<CreateEvent />} />
           <Route path="/create-contract" element={<CreateContract />} />
           <Route path="/contract/:contract_id" element={<Contract />} />
-          <Route path="/order-book" element={<OrderBook />} />
+          <Route path="/orderbook" element={<OrderBook />} /> {/* Changed from "/order-book" to "/orderbook" */}
           <Route path="/terms" element={<TermsAndConditions />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route

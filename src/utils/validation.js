@@ -161,18 +161,30 @@ export const validateWalletAddress = async (address, network, signature = null, 
 
   try {
     const endpoint = isEvent
-      ? "https://settleindash.com/api/events.php?action=verify-signature"
-      : "https://settleindash.com/api/contracts.php?action=verify-signature";
+      ? "https://settleindash.com/api/events.php"
+      : "https://settleindash.com/api/contracts.php";
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        address,
-        message: `SettleInDash:${address}`,
-        signature,
+        action: "verify-signature",
+        data: {
+          address,
+          message: `SettleInDash:${address}`,
+          signature,
+        },
       }),
     });
-    const result = await response.json();
+    const responseText = await response.text();
+    console.log("validateWalletAddress: Request:", {
+      action: "verify-signature",
+      data: { address, message: `SettleInDash:${address}`, signature },
+    });
+    console.log("validateWalletAddress: Response:", responseText, "status:", response.status);
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status} - ${responseText}`);
+    }
+    const result = JSON.parse(responseText);
     if (result.isValid) {
       return { isValid: true, message: "Wallet address and signature validated." };
     } else {
