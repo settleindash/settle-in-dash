@@ -1,11 +1,10 @@
 // src/components/ContractCard.jsx
 // Component to display contract details and handle contract acceptance for all states.
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useContracts } from "../hooks/useContracts";
 import { validateDashPublicKey, fetchConstants } from "../utils/constants";
-import { validateWalletAddress } from "../utils/validation";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 import QRCode from "qrcode";
 
@@ -19,27 +18,36 @@ const ContractCard = ({
   const navigate = useNavigate();
   const { acceptContract, formatStatus, formatDate, accepterStake, contractsLoading } = useContracts();
   const [accepterWalletAddress, setAccepterWalletAddress] = useState("");
+  const [accepterPublicKey, setAccepterPublicKey] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [walletConnected, setWalletConnected] = useState(false);
   const [signature, setSignature] = useState("");
   const [manualSignature, setManualSignature] = useState("");
   const [qrCodeUrl, setQrCodeUrl] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [constants, setConstants] = useState({ SETTLE_IN_DASH_WALLET: "", ORACLE_PUBLIC_KEY: "" });
   const [transactionInfo, setTransactionInfo] = useState(null);
 
   useEffect(() => {
     console.log("ContractCard: Rendering with contract_id:", contract.contract_id, "isSingleView:", isSingleView);
-    fetchConstants().then((result) => {
-      setConstants(result);
-      console.log("ContractCard: Fetched constants:", result);
-    }).catch((err) => {
-      console.error("ContractCard: Error fetching constants:", err);
-    });
+    fetchConstants()
+      .then((result) => {
+        setConstants(result);
+        console.log("ContractCard: Fetched constants:", result);
+      })
+      .catch((err) => {
+        console.error("ContractCard: Error fetching constants:", err);
+      });
 
     // Fetch transaction info for cancelled or settled contracts
     const fetchTransactionInfo = async () => {
-      const txid = contract.status === "cancelled" ? (contract.refund_transaction_id || contract.refund_txid) : contract.status === "settled" ? contract.settlement_transaction_id : null;
+      const txid =
+        contract.status === "cancelled"
+          ? contract.refund_transaction_id || contract.refund_txid
+          : contract.status === "settled"
+          ? contract.settlement_transaction_id
+          : null;
       if (!txid) return;
 
       try {
@@ -48,7 +56,7 @@ const ContractCard = ({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "get_transaction_info",
-            data: { txid }
+            data: { txid },
           }),
         });
         const result = await response.json();
@@ -70,34 +78,44 @@ const ContractCard = ({
     if (!dateString) return "Not set";
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return "Invalid date";
-    return date.toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-      timeZone: "Europe/Paris",
-    }).replace(/(\d+)\/(\d+)\/(\d+)/, "$2/$1/$3");
+    return date
+      .toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+        timeZone: "Europe/Paris",
+      })
+      .replace(/(\d+)\/(\d+)\/(\d+)/, "$2/$1/$3");
   };
 
-  const calculateFee = () => {
+  const calculateFee = useMemo(() => {
     if (!contract.stake || !contract.odds) return { fee: "Not set", creatorFee: "Not set", accepterFee: "Not set" };
     const stake = parseFloat(contract.stake);
     const odds = parseFloat(contract.odds);
     const creatorWinnings = stake;
     const accepterWinnings = stake * (odds - 1);
-    const creatorFee = contract.additional_contract_creator ? parseFloat(contract.additional_contract_creator).toFixed(2) : (creatorWinnings * 0.02).toFixed(2);
-    const accepterFee = contract.additional_contract_accepter ? parseFloat(contract.additional_contract_accepter).toFixed(2) : (accepterWinnings < 0 ? "0.00" : (accepterWinnings * 0.02).toFixed(2));
+    const creatorFee = contract.additional_contract_creator
+      ? parseFloat(contract.additional_contract_creator).toFixed(2)
+      : (creatorWinnings * 0.02).toFixed(2);
+    const accepterFee = contract.additional_contract_accepter
+      ? parseFloat(contract.additional_contract_accepter).toFixed(2)
+      : accepterWinnings < 0
+      ? "0.00"
+      : (accepterWinnings * 0.02).toFixed(2);
     console.log("ContractCard: Creator fee:", creatorFee, "Accepter fee:", accepterFee);
     return { fee: "Fee:", creatorFee: `Creator: ${creatorFee} DASH`, accepterFee: `Accepter: ${accepterFee} DASH` };
-  };
+  }, [contract.stake, contract.odds, contract.additional_contract_creator, contract.additional_contract_accepter]);
 
   const creatorNetWinnings = () => {
     if (!contract.stake) return "Not set";
     const stake = parseFloat(contract.stake);
-    const fee = contract.additional_contract_creator ? parseFloat(contract.additional_contract_creator) : (stake * 0.02);
+    const fee = contract.additional_contract_creator
+      ? parseFloat(contract.additional_contract_creator)
+      : stake * 0.02;
     return (stake - fee).toFixed(2) + " DASH";
   };
 
@@ -106,8 +124,44 @@ const ContractCard = ({
     const stake = parseFloat(contract.stake);
     const odds = parseFloat(contract.odds);
     const winnings = stake * (odds - 1);
-    const fee = contract.additional_contract_accepter ? parseFloat(contract.additional_contract_accepter) : (winnings < 0 ? 0 : winnings * 0.02);
+    const fee = contract.additional_contract_accepter
+      ? parseFloat(contract.additional_contract_accepter)
+      : winnings < 0
+      ? 0
+      : winnings * 0.02;
     return (winnings - fee).toFixed(2) + " DASH";
+  };
+
+  const getBalance = async (address, multisigAddress = null) => {
+    try {
+      const response = await fetch("https://settleindash.com/api/contracts.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "get_balance",
+          data: {
+            address,
+            multisig_address: multisigAddress,
+            network: "testnet", // Explicitly specify testnet
+          },
+        }),
+      });
+      const result = await response.json();
+      console.log("ContractCard: getBalance raw response:", result); // Debug raw response
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+      if (!result.success) {
+        throw new Error(result.error || "Failed to fetch balance");
+      }
+      const balance = result.balance || (result.data && result.data.balance) || 0; // Handle different response formats
+      console.log("ContractCard: getBalance response:", { address, multisigAddress, balance });
+      return balance; // Balance in DASH
+    } catch (err) {
+      console.error("ContractCard: Error fetching balance:", err);
+      setError("Failed to fetch wallet balance. Please check your connection or try again.");
+      return 0;
+    }
   };
 
   const connectWallet = async () => {
@@ -116,13 +170,28 @@ const ContractCard = ({
       console.log("ContractCard: No accepter wallet address provided");
       return;
     }
-    const walletValidation = await validateWalletAddress(accepterWalletAddress, "testnet");
-    if (!walletValidation.isValid) {
-      setError(walletValidation.message);
-      console.log("ContractCard: Validation failed - invalid accepter wallet address");
+    if (!accepterPublicKey) {
+      setError("Please enter your public key");
+      console.log("ContractCard: No accepter public key provided");
       return;
     }
-
+    // Validate wallet address with regex
+    if (!/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(accepterWalletAddress)) {
+      setError("Invalid Dash testnet wallet address (must start with 'y', 26-35 characters)");
+      console.log("ContractCard: Invalid wallet address:", accepterWalletAddress);
+      return;
+    }
+    // Validate with backend, including multisig address if available
+    const balance = await getBalance(accepterWalletAddress, contract.multisig_address);
+    // Allow proceeding with zero balance, as funds may be in multisig
+    if (balance === 0) {
+      console.log("ContractCard: Wallet has no balance, but proceeding as funds may be in multisig:", accepterWalletAddress);
+    }
+    if (!validateDashPublicKey(accepterPublicKey)) {
+      setError("Invalid public key. Ensure you entered the correct 'pubkey' from Dash Core.");
+      console.log("ContractCard: Validation failed - invalid accepter public key");
+      return;
+    }
     if (contract.status !== "open") {
       setError("This contract is no longer open for acceptance");
       console.log("ContractCard: Attempted to accept non-open contract", contract.status);
@@ -133,18 +202,26 @@ const ContractCard = ({
     setMessage("");
     console.log("ContractCard: Initiating wallet connection for contract_id:", contract.contract_id);
 
+    // Debug: Check if QRCode is defined
+    console.log("ContractCard: QRCode module:", QRCode);
+
     try {
-      if (!QRCode) {
-        throw new Error("QRCode library is not loaded");
-      }
+      setLoading(true);
       const qrCodeUrl = await QRCode.toDataURL(`signmessage:${accepterWalletAddress}:SettleInDash:${accepterWalletAddress}:`);
       setQrCodeUrl(qrCodeUrl);
       setMessage(
         `Please sign the message 'SettleInDash:${accepterWalletAddress}' in Dash Core (Tools > Sign Message) and enter the signature below.`
       );
+      console.log("ContractCard: Generated QR code for wallet:", accepterWalletAddress);
     } catch (err) {
-      setError("Failed to generate signature QR code: " + err.message);
       console.error("ContractCard: QR code generation error:", err);
+      // Fallback: Skip QR code and prompt for manual signature
+      setMessage(
+        `Failed to generate QR code. Please sign the message 'SettleInDash:${accepterWalletAddress}' in Dash Core (Tools > Sign Message) and enter the signature below.`
+      );
+      console.log("ContractCard: Skipped QR code generation, prompting for manual signature");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -156,6 +233,7 @@ const ContractCard = ({
     }
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
+        setLoading(true);
         const response = await fetch("https://settleindash.com/api/contracts.php", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -169,19 +247,24 @@ const ContractCard = ({
           }),
         });
         const responseText = await response.text();
-        console.log("ContractCard: verifyManualSignature request (attempt", attempt, "):", {
-          action: "verify-signature",
-          data: {
-            address: accepterWalletAddress,
-            message: `SettleInDash:${accepterWalletAddress}`,
-            signature: manualSignature,
-          },
-        });
+        console.log(
+          "ContractCard: verifyManualSignature request (attempt",
+          attempt,
+          "):",
+          {
+            action: "verify-signature",
+            data: {
+              address: accepterWalletAddress,
+              message: `SettleInDash:${accepterWalletAddress}`,
+              signature: manualSignature,
+            },
+          }
+        );
         console.log("ContractCard: verifyManualSignature response (attempt", attempt, "):", responseText, "status:", response.status);
         if (!response.ok) {
           if ((response.status === 400 || response.status === 503) && attempt < retries) {
             console.log("ContractCard: Error", response.status, "received, retrying after delay...");
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
             continue;
           }
           throw new Error(`HTTP error: ${response.status} - ${responseText}`);
@@ -201,9 +284,8 @@ const ContractCard = ({
       } catch (err) {
         setError("Failed to verify manual signature: " + err.message);
         console.error("ContractCard: Manual signature verification error (attempt", attempt, "):", err);
-        if (attempt === retries) {
-          return;
-        }
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -214,22 +296,17 @@ const ContractCard = ({
       console.log("ContractCard: Attempted contract acceptance without wallet or signature");
       return;
     }
+    if (!accepterPublicKey || !validateDashPublicKey(accepterPublicKey)) {
+      setError("Invalid or missing public key. Ensure you entered the correct 'pubkey' from Dash Core.");
+      console.log("ContractCard: Invalid public key");
+      return;
+    }
 
     setError("");
     console.log("ContractCard: Accepting contract for contract_id:", contract.contract_id);
 
     try {
-      const accepterPublicKey = prompt(
-        `Enter the public key for your wallet address (${accepterWalletAddress}).\n` +
-        `In Dash Core (testnet mode), run: validateaddress "${accepterWalletAddress}"\n` +
-        `Copy the "pubkey" field.`
-      );
-      if (!accepterPublicKey || !validateDashPublicKey(accepterPublicKey)) {
-        setError("Invalid or missing public key. Ensure you entered the correct 'pubkey' from Dash Core.");
-        console.log("ContractCard: Invalid public key");
-        return;
-      }
-
+      setLoading(true);
       const result = await acceptContract(contract.contract_id, {
         action: "accept",
         contract_id: contract.contract_id,
@@ -245,6 +322,7 @@ const ContractCard = ({
         setMessage(`Contract ${accepterWalletAddress === contract.WalletAddress ? "cancelled" : "accepted"} successfully!`);
         if (onAcceptSuccess) onAcceptSuccess();
         setAccepterWalletAddress("");
+        setAccepterPublicKey("");
         setSignature("");
         setManualSignature("");
         setWalletConnected(false);
@@ -256,6 +334,8 @@ const ContractCard = ({
     } catch (err) {
       setError("Failed to accept contract: " + err.message);
       console.error("ContractCard: Error accepting contract:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -286,9 +366,9 @@ const ContractCard = ({
             <p className="mt-2 text-gray-600">Percentage: {contract.percentage ? `${contract.percentage}%` : "Not set"}</p>
             <p className="mt-2 text-gray-600">Acceptance Deadline: {formatCustomDate(contract.acceptanceDeadline)}</p>
             <div className="mt-2 text-gray-600">
-              <p>{calculateFee().fee}</p>
-              <p>{calculateFee().creatorFee}</p>
-              <p>{calculateFee().accepterFee}</p>
+              <p>{calculateFee.fee}</p>
+              <p>{calculateFee.creatorFee}</p>
+              <p>{calculateFee.accepterFee}</p>
               <p>(Excludes transaction fees)</p>
             </div>
           </div>
@@ -320,19 +400,16 @@ const ContractCard = ({
           <p className="text-gray-600">Resolution Timestamp: {formatCustomDate(contract.resolutionDetails_timestamp)}</p>
           <p className="text-gray-600">Winner: {contract.winner || "Not set"}</p>
         </div>
-        {contract.status === "open" && (
-          <p className="text-gray-600 mt-2">Contract is open for acceptance.</p>
-        )}
-        {contract.status === "accepted" && (
-          <p className="text-green-600 mt-2">This contract has been accepted.</p>
-        )}
+        {contract.status === "open" && <p className="text-gray-600 mt-2">Contract is open for acceptance.</p>}
+        {contract.status === "accepted" && <p className="text-green-600 mt-2">This contract has been accepted.</p>}
         {contract.status === "cancelled" && (
           <p className="text-yellow-500 mt-2">
             Cancelled: Creator accepted with the same wallet address.
             {transactionInfo ? (
               <span>
                 {" "}
-                Transaction: {transactionInfo.status}, {transactionInfo.amount} DASH, {formatCustomDate(transactionInfo.timestamp)}
+                Transaction: {transactionInfo.status}, {transactionInfo.amount} DASH,{" "}
+                {formatCustomDate(transactionInfo.timestamp)}
               </span>
             ) : (
               <span> Transaction: Not available</span>
@@ -345,7 +422,8 @@ const ContractCard = ({
             {transactionInfo ? (
               <span>
                 {" "}
-                Transaction: {transactionInfo.status}, {transactionInfo.amount} DASH, {formatCustomDate(transactionInfo.timestamp)}
+                Transaction: {transactionInfo.status}, {transactionInfo.amount} DASH,{" "}
+                {formatCustomDate(transactionInfo.timestamp)}
               </span>
             ) : (
               <span> Transaction: Not available</span>
@@ -355,15 +433,15 @@ const ContractCard = ({
         {contract.status === "twist" && (
           <p className="text-blue-600 mt-2">
             Escalated to Twist: Awaiting resolution.
-            {contract.resolutionDetails_reasoning && (
-              <span> Reason: {contract.resolutionDetails_reasoning}</span>
-            )}
+            {contract.resolutionDetails_reasoning && <span> Reason: {contract.resolutionDetails_reasoning}</span>}
           </p>
         )}
         {contract.status === "open" && (
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <h3 className="text-md font-semibold text-gray-700 mb-2">Accept Contract</h3>
-            <p className="text-sm text-gray-600 mb-2">Enter your wallet address to accept this peer-to-peer contract (use the same address as creator to cancel).</p>
+            <p className="text-sm text-gray-600 mb-2">
+              Enter your wallet address to accept this peer-to-peer contract (use the same address as creator to cancel).
+            </p>
             <label htmlFor={`accepterWalletAddress-${contract.contract_id}`} className="block text-sm font-medium text-gray-600">
               Your DASH Wallet Address
             </label>
@@ -375,26 +453,55 @@ const ContractCard = ({
               onChange={(e) => setAccepterWalletAddress(e.target.value)}
               placeholder="Enter a valid DASH testnet address (starts with 'y')"
               aria-label="Accepter wallet address"
-              disabled={contract.status !== "open" || contractsLoading}
+              disabled={contract.status !== "open" || contractsLoading || loading}
             />
+            <label
+              htmlFor={`accepterPublicKey-${contract.contract_id}`}
+              className="block text-sm font-medium text-gray-600 mt-4"
+            >
+              Your Public Key
+            </label>
+            <input
+              id={`accepterPublicKey-${contract.contract_id}`}
+              type="text"
+              className="border p-2 rounded w-full mt-1 text-sm"
+              value={accepterPublicKey}
+              onChange={(e) => {
+                console.log("ContractCard: Public key changed:", e.target.value);
+                setAccepterPublicKey(e.target.value);
+              }}
+              placeholder="Enter your public key from Dash Core (validateaddress)"
+              aria-label="Accepter public key"
+              disabled={contract.status !== "open" || contractsLoading || loading}
+            />
+            <p className="text-gray-600 text-xs mt-1">
+              Run <code>validateaddress your_wallet_address</code> in Dash Core (testnet mode) and copy the{" "}
+              <code>pubkey</code> field.
+            </p>
             <div className="mt-4">
               <label className="block text-sm font-bold text-gray-700 mb-2">Wallet Signature</label>
               <button
                 className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
                 onClick={connectWallet}
-                disabled={walletConnected || contractsLoading}
+                disabled={walletConnected || contractsLoading || loading}
                 aria-label="Connect Wallet and Sign"
               >
-                {walletConnected ? `Connected: ${accepterWalletAddress.slice(0, 6)}...${accepterWalletAddress.slice(-4)}` : "Connect Wallet & Sign"}
+                {walletConnected
+                  ? `Connected: ${accepterWalletAddress.slice(0, 6)}...${accepterWalletAddress.slice(-4)}`
+                  : "Connect Wallet & Sign"}
               </button>
               {qrCodeUrl && !signature && (
                 <div className="mt-4">
                   <p className="text-gray-700 text-sm mb-2">
-                    Please sign the message <code>SettleInDash:{accepterWalletAddress}</code> in Dash Core (Tools &gt; Sign Message) and enter the signature below.
+                    Please sign the message <code>SettleInDash:{accepterWalletAddress}</code> in Dash Core (Tools &gt; Sign
+                    Message) and enter the signature below.
                   </p>
                   <img src={qrCodeUrl} alt="QR Code for wallet signing" className="w-64 h-64 mx-auto" />
                   <div className="mt-4">
-                    <label htmlFor={`manualSignature-${contract.contract_id}`} className="block text-sm text-gray-700 mb-2">
+                    <label
+                      htmlFor={`manualSignature-${contract.contract_id}`}
+                      className="block text-sm text-gray-700 mb-2"
+                    >
                       Enter signature:
                     </label>
                     <input
@@ -409,7 +516,7 @@ const ContractCard = ({
                     <button
                       onClick={() => verifyManualSignature()}
                       className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
-                      disabled={contractsLoading}
+                      disabled={contractsLoading || loading}
                       aria-label="Verify Signature"
                     >
                       Verify Signature
@@ -423,10 +530,15 @@ const ContractCard = ({
             <button
               className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-4 text-sm w-full"
               onClick={handleAcceptSubmission}
-              disabled={contractsLoading || contract.status !== "open" || !walletConnected || !signature}
+              disabled={contractsLoading || contract.status !== "open" || !walletConnected || !signature || loading}
               aria-label={`Accept ${contract.position_type} contract ${contract.contract_id}`}
             >
-              {contractsLoading ? "Processing..." : contract.position_type === "buy" ? "Sell (Lay)" : "Buy (Back)"} Contract
+              {contractsLoading || loading
+                ? "Processing..."
+                : contract.position_type === "buy"
+                ? "Sell (Lay)"
+                : "Buy (Back)"}{" "}
+              Contract
             </button>
           </div>
         )}
