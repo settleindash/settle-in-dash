@@ -1,345 +1,264 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
-
-// Define SECURE_ACCESS
 define('SECURE_ACCESS', true);
 
-// Enable error logging
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/../logs/php_errors.log');
-error_log("events.php: Script started, method: " . $_SERVER["REQUEST_METHOD"]);
+error_log("events.php: Started – {$_SERVER['REQUEST_METHOD']}");
 
-// Enable CORS
 $allowedOrigins = ['https://settleindash.com', 'https://www.settleindash.com'];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (in_array($origin, $allowedOrigins)) {
-    header("Access-Control-Allow-Origin: $origin");
-} else {
-    header("Access-Control-Allow-Origin: https://settleindash.com");
-}
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Signature");
+header('Access-Control-Allow-Origin: ' . (in_array($origin, $allowedOrigins) ? $origin : 'https://settleindash.com'));
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Signature');
 
-// Include config file
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
+/* Load config */
 $configPath = realpath(__DIR__ . '/../config/config.php');
-if ($configPath === false || !file_exists($configPath)) {
+if (!$configPath || !file_exists($configPath)) {
     http_response_code(500);
-    error_log("events.php: Config file not found at: " . __DIR__ . '/../config/config.php');
-    echo json_encode(["error" => "Configuration file not found"]);
+    error_log("events.php: config.php not found");
+    echo json_encode(['error' => 'Configuration missing']);
     exit;
 }
 require_once $configPath;
 
-// Reference API constants
 if (!defined('API_URL') || !defined('API_KEY')) {
     http_response_code(500);
-    error_log("events.php: API_URL or API_KEY not defined in config.php");
-    echo json_encode(["error" => "API configuration missing"]);
+    error_log("events.php: API_URL or API_KEY missing");
+    echo json_encode(['error' => 'API configuration missing']);
     exit;
 }
 $api_url = API_URL;
 $api_key = API_KEY;
 
-// Validate API constants
-if (empty($api_url) || !filter_var($api_url, FILTER_VALIDATE_URL)) {
-    http_response_code(500);
-    error_log("events.php: Invalid or missing API_URL");
-    echo json_encode(["error" => "Invalid API configuration"]);
-    exit;
-}
-if (empty($api_key)) {
-    http_response_code(500);
-    error_log("events.php: Missing API_KEY");
-    echo json_encode(["error" => "Invalid API configuration"]);
-    exit;
+/* Helper – Dash testnet address validation */
+function isDashAddress(string $addr): bool {
+    return preg_match('/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/', $addr) === 1;
 }
 
-// Handle OPTIONS preflight
-if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
-    http_response_code(200);
-    exit;
-}
-
-// Validate Dash wallet address
-function validateDashWalletAddress($address) {
-    $isValid = preg_match('/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/', $address);
-    if (!$isValid) {
-        error_log("events.php: Invalid Dash testnet wallet address: $address");
-    }
-    return $isValid;
-}
-
-// Handle POST requests
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    // Parse JSON input
-    $raw_input = file_get_contents('php://input');
-    error_log("events.php: Raw input: " . $raw_input);
-    $input = json_decode($raw_input, true);
+/* POST handling */
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $raw = file_get_contents('php://input');
+    error_log("events.php: POST raw → $raw");
+    $input = json_decode($raw, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
-        error_log("events.php: Invalid JSON - " . json_last_error_msg());
         http_response_code(400);
-        echo json_encode(["error" => "Invalid JSON: " . json_last_error_msg()]);
-        exit;
-    }
-    if (empty($input)) {
-        error_log("events.php: Empty input received");
-        http_response_code(400);
-        echo json_encode(["error" => "Empty input"]);
+        echo json_encode(['error' => 'Invalid JSON']);
         exit;
     }
 
+    // Restore old action fallback
     $action = filter_var($input['action'] ?? (filter_input(INPUT_GET, 'action', FILTER_SANITIZE_STRING) ?? ''), FILTER_SANITIZE_STRING);
+
+    // Fallback: assume verify-signature if fields present
+    if (!$action && isset($input['address'], $input['message'], $input['signature'])) {
+        $action = 'verify-signature';
+        error_log("events.php: Assumed action 'verify-signature' from payload");
+    }
+
+    /* verify-signature */
     if ($action === 'verify-signature') {
-        $address = filter_var($input['address'] ?? '', FILTER_SANITIZE_STRING);
-        $signature = $input['signature'] ?? '';
-        $message = filter_var($input['message'] ?? '', FILTER_SANITIZE_STRING);
-        error_log("events.php: verify-signature: Received data: address=$address, message=$message, signature=$signature");
-        if (empty($address) || empty($signature) || empty($message)) {
-            error_log("events.php: verify-signature: Invalid or missing data");
+        $addr = $input['address'] ?? '';
+        $msg  = $input['message'] ?? '';
+        $sig  = $input['signature'] ?? '';
+
+        if (!$addr || !$msg || !$sig || !isDashAddress($addr)) {
             http_response_code(400);
-            echo json_encode(["isValid" => false, "message" => "Invalid or missing data"]);
+            echo json_encode(['isValid' => false, 'message' => 'Invalid data']);
             exit;
         }
-        if (!validateDashWalletAddress($address)) {
-            error_log("events.php: verify-signature: Invalid Dash testnet wallet address: $address");
-            http_response_code(400);
-            echo json_encode(["isValid" => false, "message" => "Invalid Dash testnet wallet address"]);
-            exit;
-        }
+
         $payload = json_encode([
-            'api_key' => $api_key,
-            'action' => 'verify-signature',
-            'data' => [
-                'address' => $address,
-                'message' => $message,
-                'signature' => $signature
-            ]
+            'api_key' => $api_key,  // ← INJECTED
+            'action'  => 'verify-signature',
+            'data'    => ['address' => $addr, 'message' => $msg, 'signature' => $sig]
         ]);
+
         $ch = curl_init($api_url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt($ch, CURLOPT_FAILONERROR, false);
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        if ($response === false) {
-            $error = curl_error($ch);
-            error_log("events.php: verify-signature: cURL error: " . $error);
-            echo json_encode(["isValid" => false, "message" => "cURL error: " . $error]);
-            curl_close($ch);
-            exit;
-        }
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_TIMEOUT        => 10,
+        ]);
+        $resp = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        $result = json_decode($response, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log("events.php: verify-signature: JSON decode error: " . json_last_error_msg());
-            echo json_encode(["isValid" => false, "message" => "Invalid API response"]);
-            exit;
-        }
-        if ($http_code !== 200) {
-            $error = $result['error'] ?? "API returned non-200 status code: $http_code";
-            error_log("events.php: verify-signature: API error: $error");
-            echo json_encode(["isValid" => false, "message" => $error]);
-            exit;
-        }
+
+        $out = json_decode($resp, true) ?? [];
         echo json_encode([
-            "isValid" => $result['isValid'] ?? false,
-            "message" => $result['message'] ?? ($result['isValid'] ? "Signature verified successfully" : "Invalid signature")
+            'isValid' => $out['isValid'] ?? false,
+            'message' => $out['message'] ?? ($out['isValid'] ? 'OK' : 'Invalid')
         ]);
         exit;
     }
 
+    /* create_event */
     if ($action === 'create_event') {
-        $data = $input['data'] ?? [];
-        error_log("events.php: create_event: Received data: " . json_encode($data));
-        $event_id = filter_var($data['event_id'] ?? '', FILTER_SANITIZE_STRING);
-        $title = filter_var($data['title'] ?? '', FILTER_SANITIZE_STRING);
-        $category = filter_var($data['category'] ?? '', FILTER_SANITIZE_STRING);
-        $event_date = filter_var($data['event_date'] ?? '', FILTER_SANITIZE_STRING);
-        $possible_outcomes = $data['possible_outcomes'] ?? ['Yes', 'No'];
-        $oracle_source = filter_var($data['oracle_source'] ?? '', FILTER_SANITIZE_STRING);
-        $event_wallet_address = filter_var($data['event_wallet_address'] ?? '', FILTER_SANITIZE_STRING);
-        $signature = filter_var($data['signature'] ?? '', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+        $d = $input['data'] ?? [];
 
-        if (empty($title)) {
+        $title    = $d['title'] ?? '';
+        $cat      = $d['category'] ?? '';
+        $date     = $d['event_date'] ?? '';
+        $outcomes = $d['possible_outcomes'] ?? ['Yes','No'];
+        $oracle   = $d['oracle_source'] ?? '';
+        $wallet   = $d['event_wallet_address'] ?? '';  // ← snake_case from frontend
+        $sig      = $d['signature'] ?? '';
+
+        if (!$title) {
             http_response_code(400);
-            error_log("events.php: create_event: Missing title in data: " . json_encode($data));
-            echo json_encode(["error" => "Missing title"]);
+            echo json_encode(['error' => 'Title required']);
+            exit;
+        }
+        if ($wallet && !isDashAddress($wallet)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid wallet address']);
+            exit;
+        }
+        if (!is_array($outcomes) || count($outcomes) < 2) {
+            http_response_code(400);
+            echo json_encode(['error' => 'At least two outcomes required']);
             exit;
         }
 
-        if (!empty($event_wallet_address) && !validateDashWalletAddress($event_wallet_address)) {
-            http_response_code(400);
-            error_log("events.php: create_event: Invalid event_wallet_address: $event_wallet_address");
-            echo json_encode(["error" => "Invalid Dash testnet wallet address"]);
-            exit;
+        // Normalize date to full ISO (UTC)
+        if (preg_match('/T\d{2}:\d{2}$/', $date)) {
+            $date .= ':00';
         }
-
-        if (!is_array($possible_outcomes) || count($possible_outcomes) < 2) {
-            http_response_code(400);
-            error_log("events.php: create_event: Invalid possible_outcomes: Must be an array with at least two outcomes");
-            echo json_encode(["error" => "At least two possible outcomes required"]);
-            exit;
+        if (!str_ends_with($date, 'Z') && !str_contains($date, '+')) {
+            $date .= 'Z';
         }
+        error_log("events.php: create_event: Normalized date → $date");
 
-        if (!empty($signature)) {
+        /* Optional signature verification */
+        if ($sig && $wallet) {
             $payload = json_encode([
-                'api_key' => $api_key,
-                'action' => 'verify-signature',
-                'data' => [
-                    'address' => $event_wallet_address,
-                    'message' => "SettleInDash:" . $event_wallet_address,
-                    'signature' => $signature
+                'api_key' => $api_key,  // ← INJECTED
+                'action'  => 'verify-signature',
+                'data'    => [
+                    'address'   => $wallet,
+                    'message'   => "SettleInDash:$wallet",
+                    'signature' => $sig
                 ]
             ]);
             $ch = curl_init($api_url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_FAILONERROR, false);
-            $response = curl_exec($ch);
-            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $payload,
+                CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+                CURLOPT_TIMEOUT        => 10,
+            ]);
+            $vresp = curl_exec($ch);
+            $vcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
-            if ($response === false) {
-                $error = curl_error($ch);
-                error_log("events.php: create_event: verify-signature cURL error: " . $error);
-                echo json_encode(["error" => "cURL error: " . $error]);
-                exit;
-            }
-            if ($http_code !== 200) {
-                $result = json_decode($response, true);
-                $error = $result['error'] ?? "API returned non-200 status code: $http_code";
-                error_log("events.php: create_event: verify-signature API error: $error");
-                echo json_encode(["error" => $error]);
-                exit;
-            }
-            $result = json_decode($response, true);
-            if (json_last_error() !== JSON_ERROR_NONE || !isset($result['isValid']) || !$result['isValid']) {
-                $error = $result['message'] ?? 'Invalid signature';
-                error_log("events.php: create_event: Signature verification failed: " . $error);
-                echo json_encode(["error" => $error]);
+            $vres = json_decode($vresp, true) ?? [];
+            if ($vcode !== 200 || !($vres['isValid'] ?? false)) {
+                http_response_code(400);
+                echo json_encode(['error' => $vres['message'] ?? 'Signature invalid']);
                 exit;
             }
         }
 
-        $data = [
-            'api_key' => $api_key,
-            'action' => 'create_event', // Changed from 'create_contract' to 'create_event'
-            'data' => [
-                'title' => $title,
-                'category' => $category,
-                'event_date' => $event_date,
-                'possible_outcomes' => $possible_outcomes,
-                'oracle_source' => $oracle_source,
-                'eventWalletAddress' => $event_wallet_address,
-                'signature' => $signature
+        $payload = json_encode([
+            'api_key' => $api_key,  // ← INJECTED
+            'action'  => 'create_event',
+            'data'    => [
+                'title'            => $title,
+                'category'         => $cat,
+                'event_date'       => $date,
+                'possible_outcomes'=> $outcomes,
+                'oracle_source'    => $oracle,
+                'eventWalletAddress'=> $wallet,  // camelCase for db_proxy
+                'signature'        => $sig
             ]
-        ];
-        $payload = json_encode($data);
+        ]);
+
         $ch = curl_init($api_url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt($ch, CURLOPT_FAILONERROR, false);
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_TIMEOUT        => 15,
+        ]);
+        $resp = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        if ($response === false) {
-            $error = curl_error($ch);
-            error_log("events.php: create_event: cURL error: " . $error);
-            echo json_encode(["error" => "cURL error: " . $error]);
+
+        $res = json_decode($resp, true) ?? [];
+        if ($code !== 200 || !($res['success'] ?? false)) {
+            $err = $res['error'] ?? 'API error';
+            error_log("events.php: create_event failed – $err");
+            http_response_code($code === 200 ? 500 : $code);
+            echo json_encode(['error' => $err]);
             exit;
         }
-        if ($http_code !== 200) {
-            $result = json_decode($response, true);
-            $error = isset($result['error']) ? $result['error'] : 'Unknown API error';
-            error_log("events.php: create_event: API returned non-200 status code: $http_code, response: $error");
-            echo json_encode(["error" => "API request failed with status code: $http_code, details: $error"]);
-            exit;
-        }
-        $result = json_decode($response, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log("events.php: create_event: JSON decode error: " . json_last_error_msg());
-            echo json_encode(["error" => "Invalid API response"]);
-            exit;
-        }
-        if (isset($result['success']) && $result['success']) {
-            error_log("events.php: create_event: Event created successfully - event_id: " . ($result['data']['event_id'] ?? 'unknown'));
-            echo json_encode(["success" => true, "event_id" => $result['data']['event_id'] ?? $event_id]);
-        } else {
-            $error = $result['error'] ?? 'Unknown API error';
-            error_log("events.php: create_event: API error: " . $error);
-            echo json_encode(["error" => $error]);
-        }
+
+        echo json_encode([
+            'success'  => true,
+            'event_id' => $res['data']['event_id'] ?? null
+        ]);
         exit;
     }
 
-    error_log("events.php: Invalid action for POST request: $action");
+    /* unknown POST action */
     http_response_code(400);
-    echo json_encode(["error" => "Invalid action"]);
+    echo json_encode(['error' => 'Unsupported action']);
     exit;
 }
 
-// Handle GET requests
-if ($_SERVER["REQUEST_METHOD"] === "GET") {
-    $action = filter_input(INPUT_GET, 'action', FILTER_SANITIZE_STRING) ?? '';
+/* GET – get_events */
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    $action = $_GET['action'] ?? '';
     if ($action !== 'get_events') {
-        error_log("events.php: Invalid action for GET request: $action");
         http_response_code(400);
-        echo json_encode(["error" => "Invalid action"]);
+        echo json_encode(['error' => 'Invalid action']);
         exit;
     }
-    $status = filter_input(INPUT_GET, 'status', FILTER_SANITIZE_STRING) ?? 'open';
-    error_log("events.php: get_events request with status: $status");
+
+    $status   = $_GET['status'] ?? 'open';
+    $event_id = $_GET['event_id'] ?? null;
+
     $query = http_build_query([
-        'api_key' => $api_key,
-        'action' => 'get_events',
-        'status' => $status
+        'api_key'  => $api_key,     // ← INJECTED
+        'action'   => 'get_events',
+        'status'   => $status,
+        'event_id' => $event_id
     ]);
+
     $ch = curl_init("$api_url?$query");
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPGET, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-    curl_setopt($ch, CURLOPT_FAILONERROR, false);
-    $response = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPGET        => true,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_TIMEOUT        => 10,
+    ]);
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($response === false) {
-        $error = curl_error($ch);
-        error_log("events.php: get_events: cURL error: " . $error);
-        echo json_encode(["error" => "cURL error: " . $error]);
+
+    $data = json_decode($resp, true) ?? [];
+    if ($code !== 200 || !($data['success'] ?? false)) {
+        $err = $data['error'] ?? 'API error';
+        error_log("events.php: get_events failed – $err");
+        http_response_code($code === 200 ? 500 : $code);
+        echo json_encode(['error' => $err]);
         exit;
     }
-    if ($http_code !== 200) {
-        $result = json_decode($response, true);
-        $error = isset($result['error']) ? $result['error'] : 'Unknown API error';
-        error_log("events.php: get_events: API returned non-200 status code: $http_code, response: $error");
-        echo json_encode(["error" => "API request failed with status code: $http_code, details: $error"]);
-        exit;
-    }
-    $result = json_decode($response, true);
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        error_log("events.php: get_events: JSON decode error: " . json_last_error_msg());
-        echo json_encode(["error" => "Invalid API response"]);
-        exit;
-    }
-    if (isset($result['success']) && $result['success']) {
-        error_log("events.php: get_events: Events retrieved, count: " . count($result['data']));
-        echo json_encode($result);
-    } else {
-        $error = $result['error'] ?? 'Unknown API error';
-        error_log("events.php: get_events: API error: " . $error);
-        echo json_encode(["error" => $error]);
-    }
+
+    error_log("events.php: get_events: Retrieved " . count($data['data'] ?? []) . " events");
+    echo json_encode($data);
     exit;
 }
 
-error_log("events.php: Invalid method: " . $_SERVER["REQUEST_METHOD"]);
+/* Invalid HTTP method */
 http_response_code(405);
-echo json_encode(["error" => "Method not allowed"]);
-exit;
-?>
+echo json_encode(['error' => 'Method not allowed']);

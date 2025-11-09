@@ -143,6 +143,22 @@ export const validateContractCreation = async (data, selectedEvent) => {
   };
 };
 
+
+export const validateDashPublicKey = (publicKey) => {
+  if (
+    !publicKey ||
+    !(
+      /^(02|03)[0-9a-fA-F]{64}$/.test(publicKey) ||
+      /^04[0-9a-fA-F]{128}$/.test(publicKey)
+    )
+  ) {
+    console.error("constants: Invalid DASH public key:", publicKey);
+    return false;
+  }
+  return true;
+};
+
+
 export const validateWalletAddress = async (address, network, signature = null, isEvent = false) => {
   if (!address || !/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(address)) {
     console.error("validateWalletAddress: Invalid DASH testnet wallet address format:", address);

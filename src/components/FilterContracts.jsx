@@ -10,6 +10,7 @@ const FilterContracts = ({
   contractsPerPage = 20,
   renderContent,
   showFilters = true,
+ // constants,
 }) => {
   const [search, setSearch] = useState("");
   const [contractIdFilter, setContractIdFilter] = useState("");

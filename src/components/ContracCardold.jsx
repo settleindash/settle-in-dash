@@ -310,6 +310,32 @@ if (constantsError || !constants) {
       }
     };
 
+    const generateFeeQrCode = async () => {
+      if (!walletConnected || !signature) return setError("Please connect and sign first");
+      if (!newMultisigAddress) return setError("Please create a new multisig address first");
+
+      const stake = accepterStake(contract);
+      if (!stake || Number(stake) <= 0) return setError("Invalid accepter stake amount");
+
+      const feeAmount = Number(
+        contract.additional_contract_accepter || Number(stake) * 0.02
+      ).toFixed(8);
+
+      try {
+        setLoading(true);
+        const url = await QRCode.toDataURL(`dash:${SETTLE_IN_DASH_WALLET}?amount=${feeAmount}`);
+        setFeeQrCodeUrl(url);
+        setMessage(
+          `Scan the QR code to send ${feeAmount} DASH to the fee address ${SETTLE_IN_DASH_WALLET}. Then enter the fee transaction ID.`
+        );
+      } catch (err) {
+        setError("Failed to generate fee QR code: " + err.message);
+        console.error("ContractCard: Fee QR code error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     // -----------------------------------------------------------------
     // Transaction validation
     // -----------------------------------------------------------------
@@ -739,7 +765,15 @@ if (constantsError || !constants) {
                   </div>
                 )}
 
-
+                {/* Fee QR */}
+                <button
+                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm mt-2"
+                  onClick={generateFeeQrCode}
+                  disabled={loading || !walletConnected || !signature || !newMultisigAddress || feeTxValidated}
+                  aria-label="Generate Fee QR Code"
+                >
+                  Generate Fee QR Code
+                </button>
 
                 {feeQrCodeUrl && (
                   <div className="mt-4">

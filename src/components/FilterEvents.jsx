@@ -8,61 +8,41 @@ const FilterEvents = ({
   showFilters = true,
   eventsPerPage = 20,
   includePastEvents = false,
+  constants,
 }) => {
+
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [sortBy, setSortBy] = useState({ field: "", direction: "asc" });
   const [page, setPage] = useState(1);
 
-  // Stable current date/time in CEST
   const now = useMemo(() => {
     const date = new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' });
-    console.log("FilterEvents: Calculated now:", date);
     return new Date(date);
   }, []);
 
-  // Memoize filteredEvents
   const filteredEvents = useMemo(() => {
-    console.log("FilterEvents: Recalculating filteredEvents, events count:", events?.length || 0);
     return (events || [])
       .filter((e) => {
-        if (!e.event_id || !e.event_date) {
-          console.warn("FilterEvents: Event missing event_id or event_date:", e);
-          return false;
-        }
+        if (!e.event_id || !e.event_date) return false;
         const matchesSearch = (e.title || "").toLowerCase().includes(search.toLowerCase());
         const matchesCategory = !categoryFilter || e.category === categoryFilter;
         const eventDate = new Date(e.event_date);
         const isUpcoming = includePastEvents || (!isNaN(eventDate.getTime()) && eventDate > now);
-        if (!isUpcoming) {
-          console.log("FilterEvents: Excluded event due to past/invalid event date:", {
-            event_id: e.event_id,
-            title: e.title,
-            event_date: e.event_date,
-          });
-        }
         return matchesSearch && matchesCategory && isUpcoming;
       })
       .sort((a, b) => {
         if (!sortBy.field) return 0;
-        const valueA = a[sortBy.field] || (sortBy.field === "event_date" ? new Date(a.event_date) : "");
-        const valueB = b[sortBy.field] || (sortBy.field === "event_date" ? new Date(b.event_date) : "");
         if (sortBy.field === "event_date") {
           const dateA = new Date(a.event_date);
           const dateB = new Date(b.event_date);
-          if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
-            console.warn("FilterEvents: Invalid date detected:", {
-              event_id_A: a.event_id,
-              event_date_A: a.event_date,
-              event_id_B: b.event_id,
-              event_date_B: b.event_date,
-            });
-            return 0;
-          }
+          if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0;
           return sortBy.direction === "asc"
             ? dateA.getTime() - dateB.getTime()
             : dateB.getTime() - dateA.getTime();
         }
+        const valueA = a[sortBy.field] || "";
+        const valueB = b[sortBy.field] || "";
         return sortBy.direction === "asc"
           ? String(valueA).localeCompare(String(valueB))
           : String(valueB).localeCompare(String(valueA));
@@ -78,8 +58,8 @@ const FilterEvents = ({
     setCategoryFilter("");
     setSortBy({ field: "", direction: "asc" });
     setPage(1);
-    console.log("FilterEvents: Filters cleared");
   }, []);
+
 
   return (
     <div className="space-y-6">
@@ -96,7 +76,6 @@ const FilterEvents = ({
               className="border p-2 rounded w-full"
               value={search}
               onChange={(e) => {
-                console.log("FilterEvents: Search changed:", e.target.value);
                 setSearch(e.target.value);
                 setPage(1);
               }}
@@ -112,7 +91,6 @@ const FilterEvents = ({
               className="border p-2 rounded w-full"
               value={categoryFilter}
               onChange={(e) => {
-                console.log("FilterEvents: Category filter changed:", e.target.value);
                 setCategoryFilter(e.target.value || "");
                 setPage(1);
               }}
@@ -135,7 +113,6 @@ const FilterEvents = ({
               className="border p-2 rounded w-full"
               value={sortBy.field}
               onChange={(e) => {
-                console.log("FilterEvents: Sort changed:", e.target.value);
                 setSortBy({ field: e.target.value, direction: sortBy.direction });
                 setPage(1);
               }}
@@ -154,7 +131,6 @@ const FilterEvents = ({
             <button
               className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 w-full"
               onClick={() => {
-                console.log("FilterEvents: Toggling sort direction, current:", sortBy.direction);
                 setSortBy((prev) => ({ ...prev, direction: prev.direction === "asc" ? "desc" : "asc" }));
               }}
               aria-label="Toggle sort direction"
@@ -173,14 +149,13 @@ const FilterEvents = ({
           </div>
         </div>
       )}
-      {renderContent(paginatedEvents)}
+      {renderContent(paginatedEvents, constants)} {/* ← 2 args */}
       {filteredEvents.length > eventsPerPage && (
         <div className="mt-6 flex justify-center gap-4">
           <button
             className="bg-orange-500 text-white px-4 py-2 rounded disabled:opacity-50"
             onClick={() => setPage((p) => Math.max(p - 1, 1))}
             disabled={page === 1}
-            aria-label="Previous page"
           >
             Previous
           </button>
@@ -189,7 +164,6 @@ const FilterEvents = ({
             className="bg-orange-500 text-white px-4 py-2 rounded disabled:opacity-50"
             onClick={() => setPage((p) => p + 1)}
             disabled={page * eventsPerPage >= filteredEvents.length}
-            aria-label="Next page"
           >
             Next
           </button>

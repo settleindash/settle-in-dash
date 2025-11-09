@@ -1,163 +1,113 @@
 // src/components/WalletIntegration.jsx
-import { useState, useEffect, useRef } from "react";
-import { useContracts } from "../hooks/useContracts";
-import { validateWalletAddress } from "../utils/validation";
-import { validateDashPublicKey, fetchConstants } from "../utils/constants";
+import { useState } from "react";
+import { useContracts } from "../hooks/useContracts.js";
+import { useConstants } from "../hooks/useConstants.js";
 import PageHeader from "../utils/formats/PageHeader.jsx";
-import { Html5Qrcode } from "html5-qrcode";
 import QRCode from "qrcode";
 
 const WalletIntegration = () => {
-  const [walletAddress, setWalletAddress] = useState("");
-  const [signature, setSignature] = useState("");
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [transactionQrCode, setTransactionQrCode] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [constants, setConstants] = useState({ SETTLE_IN_DASH_WALLET: "", ORACLE_PUBLIC_KEY: "" });
-  const [isWalletConnected, setIsWalletConnected] = useState(false);
-  const qrReaderRef = useRef(null);
+  // Load constants (NETWORK, etc.)
+  const { constants, loading: constLoading, error: constError } = useConstants();
   const { settleContract, triggerTwist, contractsLoading } = useContracts();
 
-  // Fetch constants on mount
-  useEffect(() => {
-    fetchConstants().then((result) => {
-      setConstants(result);
-      console.log("WalletIntegration: Fetched constants:", result);
-    });
-    return () => {
-      if (qrReaderRef.current) {
-        qrReaderRef.current.stop().catch(() => {});
-      }
-    };
-  }, []);
+  // UI State
+  const [walletAddress, setWalletAddress] = useState("");
+  const [signature, setSignature] = useState("");
+  const [manualSignature, setManualSignature] = useState("");
+  const [walletQrCodeUrl, setWalletQrCodeUrl] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [isWalletConnected, setIsWalletConnected] = useState(false);
 
+  // Show loading/error while constants load
+  if (constLoading) return <div className="text-center p-4">Loading configuration…</div>;
+  if (constError) return <div className="text-red-500 text-center p-4">Error: {constError}</div>;
+  if (!constants) return null;
+
+  const { NETWORK } = constants;
+
+  // Generate QR code for signing
   const connectWallet = async () => {
-    if (!walletAddress) {
-      setError("Please enter a wallet address.");
-      return;
-    }
-    try {
-      const walletValidation = await validateWalletAddress(walletAddress, "testnet");
-      if (walletValidation.isValid) {
-        setIsWalletConnected(true);
-        setMessage("Wallet connected successfully!");
-        setTransactionQrCode(null);
-      } else if (walletValidation.qrCode) {
-        setTransactionQrCode(walletValidation.qrCode);
-        setMessage(
-          `Please sign the message 'SettleInDash:${walletAddress}' in Dash Core (Tools &gt; Sign Message).`
-        );
-        startQRScanner();
-      } else {
-        setError(walletValidation.message);
-      }
-      console.log("WalletIntegration: validateWalletAddress:", { walletAddress, qrCode: walletValidation.qrCode });
-    } catch (err) {
-      setError("Failed to connect wallet: " + err.message);
-      console.error("WalletIntegration: Wallet connection error", err);
-    }
-  };
+    if (!walletAddress) return setError("Please enter your DASH wallet address");
+    if (!/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(walletAddress))
+      return setError(`Invalid Dash ${NETWORK} wallet address`);
 
-  const startQRScanner = async () => {
-    if (!document.getElementById("qr-reader-wallet")) {
-      setError("QR reader element not found. Please refresh the page.");
-      return;
-    }
-    if (qrReaderRef.current) {
-      qrReaderRef.current.stop().catch(() => {});
-    }
-    qrReaderRef.current = new Html5Qrcode("qr-reader-wallet");
-    setIsScanning(true);
     try {
-      await qrReaderRef.current.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        async (decodedText) => {
-          if (decodedText.startsWith("signmessage:")) {
-            const [, address, message, sig] = decodedText.split(":");
-            if (address === walletAddress && message === `SettleInDash:${walletAddress}`) {
-              // Verify signature via backend
-              const response = await fetch("https://settleindash.com/api/contracts.php?action=verify-signature", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ address, message, signature: sig }),
-              });
-              const result = await response.json();
-              if (result.isValid) {
-                setSignature(sig);
-                setMessage("Signature captured! Wallet connected.");
-                setIsWalletConnected(true);
-                qrReaderRef.current.stop().then(() => {
-                  setIsScanning(false);
-                  setTransactionQrCode(null);
-                });
-              } else {
-                setError(result.message || "Invalid signature from QR code");
-                qrReaderRef.current.stop().then(() => setIsScanning(false));
-              }
-            } else {
-              setError("Invalid QR code: Address or message does not match");
-              qrReaderRef.current.stop().then(() => setIsScanning(false));
-            }
-          } else {
-            setError(
-              `Invalid QR code format. Expected a signature for <code>SettleInDash:${walletAddress}</code>. Use Dash Core (Tools &gt; Sign Message).`
-            );
-            qrReaderRef.current.stop().then(() => setIsScanning(false));
-          }
-        },
-        (error) => {
-          console.warn("QR Scan error:", error);
-          setError(`Failed to scan QR code: ${error}. Try signing in Dash Core.`);
-        }
+      setLoading(true);
+      const url = await QRCode.toDataURL(`signmessage:${walletAddress}:SettleInDash:${walletAddress}:`);
+      setWalletQrCodeUrl(url);
+      setMessage(
+        `Scan the QR code or sign the message 'SettleInDash:${walletAddress}' in Dash Core (Tools &gt; Sign Message).`
       );
     } catch (err) {
-      setError(`Failed to start QR scanner: ${err.message}`);
-      setIsScanning(false);
-      console.error("WalletIntegration: QR scanner error", err);
+      setError("Failed to generate QR code: " + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSettleContract = async (contractId) => {
-    if (!signature) {
-      setError("Please connect and sign with your wallet first");
-      return;
+  // Verify pasted signature
+  const verifySignature = async () => {
+    if (!manualSignature) return setError("Please paste your signature");
+
+    try {
+      setLoading(true);
+      const response = await fetch("https://settleindash.com/api/contracts.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify-signature",
+          data: {
+            address: walletAddress,
+            message: `SettleInDash:${walletAddress}`,
+            signature: manualSignature,
+          },
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (result.isValid) {
+        setSignature(manualSignature);
+        setIsWalletConnected(true);
+        setMessage("Wallet connected and verified!");
+        setManualSignature("");
+        setWalletQrCodeUrl(null);
+      } else {
+        setError(result.message || "Invalid signature");
+      }
+    } catch (err) {
+      setError("Verification failed: " + err.message);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Contract actions
+  const handleSettle = async (contractId) => {
+    if (!signature) return setError("Wallet not connected");
     try {
       const result = await settleContract(contractId, {
         fee_recipient: walletAddress,
         signature,
       });
-      if (result.success) {
-        setMessage("Contract settled successfully!");
-      } else {
-        setError(result.error || "Failed to settle contract");
-      }
+      setMessage(result.success ? "Settled!" : result.error);
     } catch (err) {
-      setError("Failed to settle contract: " + err.message);
-      console.error("WalletIntegration: Settle contract error", err);
+      setError(err.message);
     }
   };
 
-  const handleTriggerTwist = async (contractId) => {
-    if (!signature) {
-      setError("Please connect and sign with your wallet first");
-      return;
-    }
+  const handleTwist = async (contractId) => {
+    if (!signature) return setError("Wallet not connected");
     try {
       const result = await triggerTwist(contractId, {
         wallet_address: walletAddress,
         signature,
       });
-      if (result.success) {
-        setMessage("Twist triggered successfully!");
-      } else {
-        setError(result.error || "Failed to trigger twist");
-      }
+      setMessage(result.success ? "Twist triggered!" : result.error);
     } catch (err) {
-      setError("Failed to trigger twist: " + err.message);
-      console.error("WalletIntegration: Trigger twist error", err);
+      setError(err.message);
     }
   };
 
@@ -165,74 +115,96 @@ const WalletIntegration = () => {
     <div className="min-h-screen bg-background p-4">
       <PageHeader title="Wallet Integration" />
       <div className="max-w-3xl mx-auto mt-6 bg-white p-6 rounded-lg shadow">
-        <h2 className="text-lg font-semibold text-gray-700 mb-4">Connect Your DASH Wallet</h2>
+
+        <h2 className="text-lg font-semibold text-gray-700 mb-4">
+          Connect Your DASH Wallet
+        </h2>
+
+        {/* Wallet Address */}
         <div className="mb-6">
-          <label htmlFor="walletAddress" className="block text-sm font-medium text-gray-600">
-            Your DASH Wallet Address
+          <label htmlFor="wallet" className="block text-sm font-medium text-gray-600">
+            DASH Wallet Address
           </label>
           <input
-            id="walletAddress"
+            id="wallet"
             type="text"
             className="border p-2 rounded w-full mt-1 text-sm"
             value={walletAddress}
             onChange={(e) => setWalletAddress(e.target.value)}
-            placeholder="Enter a valid DASH address (starts with 'y' or 'X' for testnet)"
-            disabled={isWalletConnected || contractsLoading}
-            aria-label="Wallet address"
+            placeholder={`Enter ${NETWORK} address (starts with 'y')`}
+            disabled={isWalletConnected || loading}
           />
         </div>
+
+        {/* Connect Button */}
         <button
           onClick={connectWallet}
           className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
-          disabled={isWalletConnected || contractsLoading}
-          aria-label="Connect wallet"
+          disabled={isWalletConnected || loading}
         >
-          {isWalletConnected ? `Connected: ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : "Connect Wallet"}
+          {isWalletConnected
+            ? `Connected: ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+            : "Connect & Sign"}
         </button>
-        {transactionQrCode && (
-          <div className="mt-4">
-            <p className="text-gray-700 text-sm mb-2">
-              Scan this QR code to sign <code>SettleInDash:{walletAddress}</code> in Dash Core (Tools &gt; Sign Message).
+
+        {/* QR Code + Manual Signature */}
+        {walletQrCodeUrl && !isWalletConnected && (
+          <div className="mt-6 p-4 border rounded bg-gray-50">
+            <p className="text-sm text-gray-700 mb-3">
+              Sign the message <code>SettleInDash:{walletAddress}</code> in Dash Core.
             </p>
-            <img src={transactionQrCode} alt="QR Code" className="w-64 h-64 mx-auto" />
-            <button
-              onClick={startQRScanner}
-              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm mt-2"
-              disabled={isScanning || contractsLoading}
-              aria-label="Start QR Scan"
-            >
-              {isScanning ? "Scanning..." : "Start QR Scanner"}
-            </button>
+            <img src={walletQrCodeUrl} alt="Sign QR Code" className="w-64 h-64 mx-auto" />
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-600 mb-1">
+                Paste Signature:
+              </label>
+              <input
+                type="text"
+                className="border p-2 rounded w-full text-sm mb-2"
+                value={manualSignature}
+                onChange={(e) => setManualSignature(e.target.value)}
+                placeholder="Paste base64 signature here"
+                disabled={loading}
+              />
+              <button
+                onClick={verifySignature}
+                className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
+                disabled={loading}
+              >
+                Verify Signature
+              </button>
+            </div>
           </div>
         )}
-        <div
-          id="qr-reader-wallet"
-          style={{ width: "300px", height: "300px", display: isScanning ? "block" : "none", margin: "0 auto" }}
-        ></div>
-        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-        {message && <p className="text-green-500 text-sm mt-2">{message}</p>}
+
+        {/* Messages */}
+        {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
+        {message && <p className="text-green-500 text-sm mt-3">{message}</p>}
+        {loading && <p className="text-blue-500 text-sm mt-3">Processing…</p>}
+
+        {/* Contract Actions */}
         {isWalletConnected && (
-          <div className="mt-6">
-            <h3 className="text-md font-semibold text-gray-700 mb-2">Contract Actions</h3>
-            <p className="text-sm text-gray-600 mb-2">
-              Use your connected wallet to settle or trigger a twist for contracts.
-            </p>
-            <button
-              onClick={() => handleSettleContract("example_contract_id")}
-              className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 text-sm mr-2"
-              disabled={contractsLoading}
-              aria-label="Settle contract"
-            >
-              Settle Contract
-            </button>
-            <button
-              onClick={() => handleTriggerTwist("example_contract_id")}
-              className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 text-sm"
-              disabled={contractsLoading}
-              aria-label="Trigger twist"
-            >
-              Trigger Twist
-            </button>
+          <div className="mt-8 pt-6 border-t">
+            <h3 className="text-md font-semibold text-gray-700 mb-3">
+              Contract Actions
+            </h3>
+            <div className="space-x-2">
+              <button
+                onClick={() => handleSettle("example_contract_id")}
+                className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 text-sm"
+                disabled={contractsLoading}
+              >
+                Settle Contract
+              </button>
+              <button
+                onClick={() => handleTwist("example_contract_id")}
+                className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 text-sm"
+                disabled={contractsLoading}
+              >
+                Trigger Twist
+              </button>
+            </div>
           </div>
         )}
       </div>

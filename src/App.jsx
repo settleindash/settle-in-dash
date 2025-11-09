@@ -33,7 +33,7 @@ const AppContent = () => {
           <Route path="/" element={<Home />} />
           <Route path="/marketplace" element={<Marketplace />} />
           <Route path="/settle" element={<Settle />} />
-          <Route path="/contract-card" element={<ContractCard />} />
+
           <Route path="/transparency" element={<Transparency />} />
           <Route path="/about" element={<About />} />
           <Route path="/support" element={<Support />} />
@@ -43,9 +43,7 @@ const AppContent = () => {
           <Route path="/orderbook" element={<OrderBook />} /> {/* Changed from "/order-book" to "/orderbook" */}
           <Route path="/terms" element={<TermsAndConditions />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
-          <Route
-            path="/wallet-integration"
-            element={<WalletIntegration event_id={event_id} eventTitle={eventTitle} />}
+          <Route path="/wallet-integration" element={<WalletIntegration event_id={event_id} eventTitle={eventTitle} />}
           />
           <Route path="*" element={<div className="p-4 text-center">404: Page Not Found</div>} />
         </Routes>
