@@ -70,7 +70,7 @@ const CreateEvent = () => {
             const [, address, message, sig] = decodedText.split(":");
             console.log("CreateEvent: QR parsed:", { address, message, sig });
             if (address === eventWalletAddress && message === `SettleInDash:${eventWalletAddress}`) {
-              const response = await fetch("https://settleindash.com/api/events.php?action=verify-signature", {
+              const response = await fetch("https://settleindash.com/api/events.php?action=verify_signature", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -138,7 +138,7 @@ const CreateEvent = () => {
     }
     setLoading(true);
     try {
-      const response = await fetch("https://settleindash.com/api/events.php?action=verify-signature", {
+      const response = await fetch("https://settleindash.com/api/events.php?action=verify_signature", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

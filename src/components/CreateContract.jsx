@@ -144,7 +144,7 @@ const CreateContract = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            action: "verify-signature",
+            action: "verify_signature",
             data: {
               address: walletAddress,
               message: `SettleInDash:${walletAddress}`,
@@ -198,7 +198,7 @@ const CreateContract = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "create-multisig",
+          action: "create_multisig",
           data: {
             public_keys: [creatorPublicKey, PLACEHOLDER_PUBLIC_KEY, ORACLE_PUBLIC_KEY],
             required_signatures: 2,
@@ -352,7 +352,7 @@ const CreateContract = () => {
         odds: Number(odds),
         acceptance_deadline: new Date(`${acceptanceDeadline}:00+02:00`).toISOString(),
         multisig_address: multisigAddress,
-        redeem_script: redeemScript,
+        //redeem_script: redeemScript,
         refund_transaction_id: "",
         creator_public_key: creatorPublicKey,
         transaction_id: transactionId,
@@ -439,12 +439,12 @@ const CreateContract = () => {
                 className="border p-2 rounded w-full text-sm"
                 value={creatorPublicKey}
                 onChange={(e) => setCreatorPublicKey(e.target.value)}
-                placeholder="Enter your public key from Dash Core (validateaddress)"
+                placeholder="Enter your public key from Dash Core (getaddressinfo)"
                 disabled={loading}
                 aria-label="Creator public key"
               />
               <p className="text-gray-600 text-xs mt-1">
-                Run <code>validateaddress your_wallet_address</code> in Dash Core ({NETWORK} mode) and copy the <code>pubkey</code> field.
+                Run <code>getaddressinfo your_wallet_address</code> in Dash Core ({NETWORK} mode) and copy the <code>pubkey</code> field.
               </p>
             </div>
 

@@ -19,13 +19,20 @@ export const useConstants = () => {
       setLoading(true);
       setError(null);
       try {
+        // Use your CLEAN proxy — no API key in frontend
         const resp = await fetch("https://settleindash.com/api/constants.php");
+
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
         const data = await resp.json();
-        if (!data.success) throw new Error(data.error || "Invalid config");
+
+        if (!data.success) throw new Error(data.error || "Failed to load constants");
+
+        // Cache the clean response exactly as your proxy returns
         cachedConstants = data;
         setConstants(data);
       } catch (err) {
+        console.error("useConstants error:", err);
         setError(err.message);
       } finally {
         setLoading(false);

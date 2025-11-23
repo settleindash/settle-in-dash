@@ -31,13 +31,8 @@
     const [signature, setSignature] = useState("");
     const [manualSignature, setManualSignature] = useState("");
     const [accepterTransactionId, setAccepterTransactionId] = useState("");
-    const [accepterFeeTransactionId, setAccepterFeeTransactionId] = useState("");
     const [stakeTxValidated, setStakeTxValidated] = useState(false);
-    const [feeTxValidated, setFeeTxValidated] = useState(false);
     const [stakeQrCodeUrl, setStakeQrCodeUrl] = useState(null);
-    const [feeQrCodeUrl, setFeeQrCodeUrl] = useState(null);
-    const [newMultisigAddress, setNewMultisigAddress] = useState("");
-    const [newRedeemScript, setNewRedeemScript] = useState("");
     const [qrCodeUrl, setQrCodeUrl] = useState(null);
     const [loading, setLoading] = useState(false);
     const [transactionInfo, setTransactionInfo] = useState(null);
@@ -45,10 +40,7 @@
     const [eventLoading, setEventLoading] = useState(false);
     const [eventError, setEventError] = useState(null);
 
-// 1. FETCH CONSTANTS — INDEPENDENT
-// (already handled inside useConstants.js)
 
-// 2. FETCH EVENT — SEPARATE EFFECT (JUST LIKE CREATECONTRACT)
 useEffect(() => {
   const fetchEvent = async () => {
     setEventLoading(true);
@@ -209,7 +201,7 @@ if (constantsError || !constants) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              action: "verify-signature",
+              action: "verify_signature",
               data: {
                 address: accepterWalletAddress,
                 message: `SettleInDash:${accepterWalletAddress}`,
@@ -248,67 +240,27 @@ if (constantsError || !constants) {
     };
 
     // -----------------------------------------------------------------
-    // Multisig creation
+    // QR code generation stake only
     // -----------------------------------------------------------------
-    const createMultisig = async () => {
-      if (!walletConnected || !signature) return setError("Please connect and sign first");
-      if (!accepterPublicKey) return setError("Please provide your public key");
+const generateStakeQrCode = async () => {
+  if (!walletConnected || !signature) return setError("Please connect and sign first");
 
-      try {
-        setLoading(true);
-        const response = await fetch("https://settleindash.com/api/contracts.php", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "create-multisig",
-            data: {
-              public_keys: [contract.creator_public_key, accepterPublicKey, ORACLE_PUBLIC_KEY],
-              required_signatures: 2,
-              network: NETWORK,
-            },
-          }),
-        });
-        const result = await response.json();
+  const stake = accepterStake(contract);
+  if (!stake || Number(stake) <= 0) return setError("Invalid accepter stake amount");
+  if (!contract.multisig_address) return setError("Contract multisig address missing");
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        if (!result.success) throw new Error(result.error || "Failed to create multisig");
-
-        setNewMultisigAddress(result.multisig_address);
-        setNewRedeemScript(result.redeemScript || "");
-        setMessage("New multisig address created successfully!");
-      } catch (err) {
-        setError("Failed to create multisig address: " + err.message);
-        console.error("ContractCard: Multisig creation error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // -----------------------------------------------------------------
-    // QR code generation (stake & fee)
-    // -----------------------------------------------------------------
-    const generateStakeQrCode = async () => {
-      if (!walletConnected || !signature) return setError("Please connect and sign first");
-      if (!newMultisigAddress) return setError("Please create a new multisig address first");
-
-      const stake = accepterStake(contract);
-      if (!stake || Number(stake) <= 0) return setError("Invalid accepter stake amount");
-
-      try {
-        setLoading(true);
-        const amount = Number(stake).toFixed(8);
-        const url = await QRCode.toDataURL(`dash:${newMultisigAddress}?amount=${amount}`);
-        setStakeQrCodeUrl(url);
-        setMessage(
-          `Scan the QR code to send ${amount} DASH to the multisig address ${newMultisigAddress}. Then enter the transaction ID.`
-        );
-      } catch (err) {
-        setError("Failed to generate stake QR code: " + err.message);
-        console.error("ContractCard: Stake QR code error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  try {
+    setLoading(true);
+    const amount = Number(stake).toFixed(8);
+    const url = await QRCode.toDataURL(`dash:${contract.multisig_address}?amount=${amount}`);
+    setStakeQrCodeUrl(url);
+    setMessage(`Send ${amount} DASH to multisig and paste txid below`);
+  } catch (err) {
+    setError("QR generation failed: " + err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
     // -----------------------------------------------------------------
     // Transaction validation
@@ -367,40 +319,23 @@ if (constantsError || !constants) {
       return false;
     };
 
-    const handleValidateStakeTransaction = async () => {
-      if (!accepterTransactionId) return setError("Please enter the stake transaction ID");
-      const stake = accepterStake(contract);
-      if (!stake || Number(stake) <= 0) return setError("Invalid accepter stake amount");
+const handleValidateStakeTransaction = async () => {
+  if (!accepterTransactionId) return setError("Enter transaction ID");
+  const stake = accepterStake(contract);
+  if (!stake || Number(stake) <= 0) return setError("Invalid stake");
 
-      const amount = Number(stake).toFixed(8);
-      const ok = await validateTransaction(accepterTransactionId, newMultisigAddress, Number(amount), "stake");
-      if (ok) {
-        setStakeTxValidated(true);
-        setMessage("Stake transaction validated successfully!");
-      } else {
-        setStakeTxValidated(false);
-      }
-    };
+  const ok = await validateTransaction(
+    accepterTransactionId,
+    contract.multisig_address,
+    Number(stake).toFixed(8),
+    "stake"
+  );
 
-    const handleValidateFeeTransaction = async () => {
-      if (!accepterFeeTransactionId) return setError("Please enter the fee transaction ID");
-      const stake = accepterStake(contract);
-      if (!stake || Number(stake) <= 0) return setError("Invalid accepter stake amount");
-
-      const feeAmount = Number(contract.additional_contract_accepter || Number(stake) * 0.02).toFixed(8);
-      const ok = await validateTransaction(
-        accepterFeeTransactionId,
-        SETTLE_IN_DASH_WALLET,
-        Number(feeAmount),
-        "fee"
-      );
-      if (ok) {
-        setFeeTxValidated(true);
-        setMessage("Fee transaction validated successfully!");
-      } else {
-        setFeeTxValidated(false);
-      }
-    };
+  if (ok) {
+    setStakeTxValidated(true);
+    setMessage("Stake confirmed! Ready to accept.");
+  }
+};
 
     // -----------------------------------------------------------------
     // Accept / Cancel submission
@@ -408,10 +343,7 @@ if (constantsError || !constants) {
     const handleAcceptSubmission = async () => {
       if (!walletConnected || !signature) return setError("Please connect and sign first");
       if (!stakeTxValidated) return setError("Please validate the stake transaction");
-      if (!feeTxValidated) return setError("Please validate the fee transaction");
-      if (!accepterPublicKey || !validateDashPublicKey(accepterPublicKey))
-        return setError("Invalid public key");
-      if (!newMultisigAddress || !newRedeemScript) return setError("Please create a new multisig address");
+      if (!accepterPublicKey || !validateDashPublicKey(accepterPublicKey)) return setError("Invalid public key");
 
       setError("");
       console.log("ContractCard: Accepting contract for contract_id:", contract.contract_id);
@@ -423,11 +355,8 @@ if (constantsError || !constants) {
           accepterWalletAddress,
           signature,
           message: `SettleInDash:${accepterWalletAddress}`,
-          new_multisig_address: newMultisigAddress,
           accepter_public_key: accepterPublicKey,
           accepter_transaction_id: accepterTransactionId,
-          accepter_fee_transaction_id: accepterFeeTransactionId,
-          redeem_script: newRedeemScript,
           network: NETWORK,
         };
         console.log("ContractCard: acceptContract payload:", JSON.stringify(payload));
@@ -445,13 +374,8 @@ if (constantsError || !constants) {
           setSignature("");
           setManualSignature("");
           setAccepterTransactionId("");
-          setAccepterFeeTransactionId("");
           setStakeTxValidated(false);
-          setFeeTxValidated(false);
           setStakeQrCodeUrl(null);
-          setFeeQrCodeUrl(null);
-          setNewMultisigAddress("");
-          setNewRedeemScript("");
           setWalletConnected(false);
           if (navigateTo) navigate(navigateTo);
         } else {
@@ -620,17 +544,20 @@ if (constantsError || !constants) {
                 className="border p-2 rounded w-full mt-1 text-sm"
                 value={accepterPublicKey}
                 onChange={(e) => setAccepterPublicKey(e.target.value)}
-                placeholder="Enter your public key from Dash Core (validateaddress)"
+                placeholder="Enter your public key from Dash Core (getaddressinfo)"
                 aria-label="Accepter public key"
                 disabled={contract.status !== "open" || contractsLoading || loading}
               />
               <p className="text-gray-600 text-xs mt-1">
-                Run <code>validateaddress your_wallet_address</code> in Dash Core ({NETWORK} mode) and copy the <code>pubkey</code> field.
+                Run <code>getaddressinfo your_wallet_address</code> in Dash Core ({NETWORK} mode) and copy the <code>pubkey</code> field.
               </p>
 
+              {/* BIG DANISH SPACE BEFORE WALLET SIGNATURE */}
+              <div className="h-8" />
+
               {/* Wallet signature */}
-              <div className="mt-4">
-                <label className="block text-sm font-bold text-gray-700 mb-2">Wallet Signature</label>
+            <div className="mb-6">
+              <label className="block text-lg font-bold text-primary mb-2">Wallet Signature</label>
                 <button
                   className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
                   onClick={connectWallet}
@@ -675,135 +602,91 @@ if (constantsError || !constants) {
               </div>
 
               {/* Multisig & QR codes */}
-              <div className="mt-6">
-                <label className="block text-sm font-bold text-gray-700 mb-2">Fund Multisig</label>
+              <div className="mb-6">
+                <label className="block text-lg font-bold text-primary mb-2">
+                  Send your stake to the existing multisig address
+                </label>
 
-                {/* Create multisig */}
-                <button
-                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
-                  onClick={createMultisig}
-                  disabled={loading || !walletConnected || !signature || !!newMultisigAddress}
-                  aria-label="Create Multisig Address"
-                >
-                  Create New Multisig Address
-                </button>
-                {newMultisigAddress && (
-                  <p className="text-gray-600 text-sm mt-2">New Multisig Address: {newMultisigAddress}</p>
-                )}
+                {/* Multisig address already exists — show it */}
+                <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                  <p className="text-xs font-mono bg-white p-2 rounded break-all border">
+                    {contract.multisig_address || "Loading..."}
+                  </p>
+                </div>
 
-                {/* Stake QR */}
+                {/* Generate Stake QR Code — EXACTLY LIKE CREATECONTRACT */}
                 <button
-                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm mt-2"
+                  type="button"
+                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm w-full font-bold shadow-md disabled:opacity-50"
                   onClick={generateStakeQrCode}
-                  disabled={loading || !walletConnected || !signature || !newMultisigAddress || stakeTxValidated}
-                  aria-label="Generate Stake QR Code"
+                  disabled={loading || !walletConnected || !signature || stakeTxValidated}
                 >
-                  Generate Stake QR Code
+                  {stakeTxValidated ? "Stake Sent & Validated!" : "Generate Stake QR Code"}
                 </button>
 
                 {stakeQrCodeUrl && (
-                  <div className="mt-4">
-                    <p className="text-gray-700 text-sm mb-2">
-                      Stake Transfer: Send {Number(accepterStake(contract)).toFixed(8)} DASH to multisig address {newMultisigAddress}
+                  <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-gray-800 font-medium mb-2">
+                      Send exactly <strong>{Number(accepterStake(contract)).toFixed(8)} DASH</strong>
                     </p>
-                    <p className="text-gray-600 text-xs mb-2">
-                      Note: A small network fee (approximately 0.001 DASH) may be deducted from your stake.
+                    <p className="text-xs text-gray-700 mb-3 break-all font-mono bg-white p-2 rounded">
+                      {contract.multisig_address}
                     </p>
-                    <img src={stakeQrCodeUrl} alt="Stake QR Code" className="w-64 h-64 mx-auto" />
-                    <p className="text-gray-600 text-xs mt-1">Multisig Address: {newMultisigAddress}</p>
+
+                    <div className="bg-white p-4 rounded-lg shadow-inner mx-auto w-fit">
+                      <img src={stakeQrCodeUrl} alt="Stake QR Code" className="w-64 h-64" />
+                    </div>
+
+                    <p className="text-green-700 font-bold mt-4 text-center text-lg">
+                      No upfront fee! 3% deducted from winner only.
+                    </p>
 
                     <div className="mt-4">
-                      <label htmlFor={`accepterTransactionId-${contract.contract_id}`} className="block text-sm text-gray-700 mb-2">
-                        Stake Transaction ID:
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Paste Stake Transaction ID:
                       </label>
-                      <input
-                        id={`accepterTransactionId-${contract.contract_id}`}
-                        type="text"
-                        className="border p-2 rounded w-full text-sm mb-2"
-                        value={accepterTransactionId}
-                        onChange={(e) => setAccepterTransactionId(e.target.value)}
-                        placeholder="Enter stake transaction ID (64-character hex)"
-                        disabled={loading || stakeTxValidated}
-                        aria-label="Stake transaction ID"
-                      />
-                      <button
-                        onClick={handleValidateStakeTransaction}
-                        className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
-                        disabled={loading || stakeTxValidated}
-                        aria-label="Validate Stake Transaction"
-                      >
-                        Validate Stake Transaction
-                      </button>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          className="border p-2 rounded flex-1 text-sm font-mono"
+                          value={accepterTransactionId}
+                          onChange={(e) => setAccepterTransactionId(e.target.value)}
+                          placeholder="64-character txid..."
+                          disabled={loading || stakeTxValidated}
+                        />
+                        <button
+                          onClick={handleValidateStakeTransaction}
+                          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm whitespace-nowrap"
+                          disabled={loading || stakeTxValidated}
+                        >
+                          {stakeTxValidated ? "Validated" : "Validate"}
+                        </button>
+                      </div>
+                      {stakeTxValidated && (
+                        <p className="text-green-600 font-bold text-center mt-3 text-lg">
+                          Stake confirmed! Ready to accept.
+                        </p>
+                      )}
                     </div>
-                    {stakeTxValidated && <p className="text-green-500 text-sm mt-2">Stake transaction validated successfully!</p>}
-                  </div>
-                )}
-
-
-
-                {feeQrCodeUrl && (
-                  <div className="mt-4">
-                    <p className="text-gray-700 text-sm mb-2">
-                      Fee Transfer: Send{" "}
-                      {(contract.additional_contract_accepter || Number(accepterStake(contract)) * 0.02).toFixed(8)} DASH to fee address{" "}
-                      {SETTLE_IN_DASH_WALLET}
-                    </p>
-                    <p className="text-gray-600 text-xs mb-2">
-                      Note: A small network fee (approximately 0.001 DASH) may be deducted from your fee.
-                    </p>
-                    <img src={feeQrCodeUrl} alt="Fee QR Code" className="w-64 h-64 mx-auto" />
-                    <p className="text-gray-600 text-xs mt-1">Fee Address: {SETTLE_IN_DASH_WALLET}</p>
-
-                    <div className="mt-4">
-                      <label htmlFor={`accepterFeeTransactionId-${contract.contract_id}`} className="block text-sm text-gray-700 mb-2">
-                        Fee Transaction ID:
-                      </label>
-                      <input
-                        id={`accepterFeeTransactionId-${contract.contract_id}`}
-                        type="text"
-                        className="border p-2 rounded w-full text-sm mb-2"
-                        value={accepterFeeTransactionId}
-                        onChange={(e) => setAccepterFeeTransactionId(e.target.value)}
-                        placeholder="Enter fee transaction ID (64-character hex)"
-                        disabled={loading || feeTxValidated}
-                        aria-label="Fee transaction ID"
-                      />
-                      <button
-                        onClick={handleValidateFeeTransaction}
-                        className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
-                        disabled={loading || feeTxValidated}
-                        aria-label="Validate Fee Transaction"
-                      >
-                        Validate Fee Transaction
-                      </button>
-                    </div>
-                    {feeTxValidated && <p className="text-green-500 text-sm mt-2">Fee transaction validated successfully!</p>}
                   </div>
                 )}
               </div>
 
-              {/* Final accept button */}
+              {/* Final accept button — EXACTLY LIKE CREATECONTRACT */}
               <button
-                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mt-4 text-sm w-full"
+                type="button"
+                className="bg-orange-500 text-white px-6 py-4 rounded-lg hover:bg-orange-600 text-lg font-bold w-full shadow-2xl mt-8 disabled:opacity-50"
                 onClick={handleAcceptSubmission}
                 disabled={
-                  contractsLoading ||
-                  contract.status !== "open" ||
+                  loading ||
                   !walletConnected ||
                   !signature ||
-                  !stakeTxValidated ||
-                  !feeTxValidated ||
-                  loading
+                  !stakeTxValidated
                 }
-                aria-label={`Accept ${contract.position_type} contract ${contract.contract_id}`}
               >
-                {contractsLoading || loading
-                  ? "Processing..."
-                  : contract.position_type === "buy"
-                  ? "Sell (Lay)"
-                  : "Buy (Back)"}{" "}
-                Contract
+                {loading ? "Accepting Contract..." : "Accept Contract"}
               </button>
+              
             </div>
           )}
         </div>

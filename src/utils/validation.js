@@ -1,3 +1,5 @@
+export const SIGNATURE_MESSAGE_PREFIX = "SettleInDash:";
+
 export const parseOutcomes = (outcomes) => {
   if (!outcomes) return [];
   try {
@@ -159,6 +161,7 @@ export const validateDashPublicKey = (publicKey) => {
 };
 
 
+
 export const validateWalletAddress = async (address, network, signature = null, isEvent = false) => {
   if (!address || !/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(address)) {
     console.error("validateWalletAddress: Invalid DASH testnet wallet address format:", address);
@@ -183,7 +186,7 @@ export const validateWalletAddress = async (address, network, signature = null, 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "verify-signature",
+        action: "verify_signature",
         data: {
           address,
           message: `SettleInDash:${address}`,
@@ -193,7 +196,7 @@ export const validateWalletAddress = async (address, network, signature = null, 
     });
     const responseText = await response.text();
     console.log("validateWalletAddress: Request:", {
-      action: "verify-signature",
+      action: "verify_signature",
       data: { address, message: `SettleInDash:${address}`, signature },
     });
     console.log("validateWalletAddress: Response:", responseText, "status:", response.status);

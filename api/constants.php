@@ -1,15 +1,12 @@
 <?php
-/* constants.php – public API for constants */
 header('Content-Type: application/json; charset=utf-8');
 
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
-ini_set('error_log', __DIR__ . '/../logs/php_errors.log');
-error_log("constants.php: Started – {$_SERVER['REQUEST_METHOD']}");
-
-$allowedOrigins = ['https://settleindash.com', 'https://www.settleindash.com'];
+// CORS
+$allowed = ['https://settleindash.com', 'https://www.settleindash.com'];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-header('Access-Control-Allow-Origin: ' . (in_array($origin, $allowedOrigins) ? $origin : 'https://settleindash.com'));
+if (in_array($origin, $allowed)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+}
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
@@ -18,74 +15,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    http_response_code(405);
-    echo json_encode(['error' => 'Method not allowed']);
-    exit;
-}
+// Load config as array (works perfectly on one.com)
+$config = require __DIR__ . '/../config/config.php';
 
-/* ------------------------------------------------------------------ */
-/* Load config                                                        */
-/* ------------------------------------------------------------------ */
-$configPath = realpath(__DIR__ . '/../config/config.php');
-if (!$configPath || !file_exists($configPath)) {
+if (empty($config['API_URL']) || empty($config['API_KEY'])) {
     http_response_code(500);
-    error_log("constants.php: config.php missing");
-    echo json_encode(['error' => 'Configuration missing']);
+    echo json_encode(['error' => 'API config missing']);
     exit;
 }
-require_once $configPath;
 
-if (!defined('API_URL') || !defined('API_KEY')) {
-    http_response_code(500);
-    error_log("constants.php: API_URL or API_KEY missing");
-    echo json_encode(['error' => 'API configuration missing']);
-    exit;
-}
-$api_url = API_URL;
-$api_key = API_KEY;
-
-/* ------------------------------------------------------------------ */
-/* GET – get-constants                                                */
-/* ------------------------------------------------------------------ */
+// Call backend
 $payload = json_encode([
-    'api_key' => $api_key,
-    'action' => 'get_constants'
+    'api_key' => $config['API_KEY'],
+    'action'  => 'get_constants'
 ]);
 
-$ch = curl_init($api_url);
+$ch = curl_init(rtrim($config['API_URL'], '/') . '/index.php');
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => $payload,
-    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-    CURLOPT_TIMEOUT => 10,
-    CURLOPT_SSL_VERIFYPEER => false,
-    CURLOPT_SSL_VERIFYHOST => false,
+    CURLOPT_POST           => true,
+    CURLOPT_POSTFIELDS     => $payload,
+    CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+    CURLOPT_TIMEOUT        => 15,
 ]);
+
 $resp = curl_exec($ch);
 $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
-if ($code !== 200) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Failed to fetch constants']);
+if ($code !== 200 || !$resp) {
+    http_response_code(502);
+    echo json_encode(['error' => 'Backend unreachable']);
     exit;
 }
 
-$result = json_decode($resp, true);
-if (!$result['success']) {
-    http_response_code(500);
-    echo json_encode(['error' => $result['error'] ?? 'Unknown error']);
+$data = json_decode($resp, true);
+if (!($data['success'] ?? false)) {
+    http_response_code(502);
+    echo json_encode(['error' => 'Invalid backend response']);
     exit;
 }
 
-$data = $result['data'];
+// THIS IS GOLD — KEEP IT FOREVER
 echo json_encode([
-    'success' => true,
-    'NETWORK' => $data['network'],
-    'SETTLE_IN_DASH_WALLET' => $data['fee_address'],
-    'ORACLE_PUBLIC_KEY' => $data['oracle_public_key'],
-    'PLACEHOLDER_PUBLIC_KEY' => $data['placeholder_public_key'],
-], JSON_FORCE_OBJECT);
+    'success'                => true,
+    'NETWORK'                => $data['data']['network'] ?? 'testnet',
+    'SETTLE_IN_DASH_WALLET'  => $data['data']['fee_address'] ?? '',
+    'ORACLE_PUBLIC_KEY'      => $data['data']['oracle_public_key'] ?? '',
+    'PLACEHOLDER_PUBLIC_KEY' => $data['data']['placeholder_public_key'] ?? '',
+    'FEE_PERCENTAGE'         => $data['data']['fee_percentage'] ?? 3,
+    'TX_FEE'                 => $data['data']['tx_fee'] ?? '0.00001',
+]);
 exit;
