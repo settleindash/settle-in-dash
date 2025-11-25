@@ -38,7 +38,6 @@ const CreateContract = () => {
   const [signature, setSignature] = useState("");
   const [manualSignature, setManualSignature] = useState("");
   const [transactionId, setTransactionId] = useState("");
-  const [redeemScript, setRedeemScript] = useState("");
   const [walletQrCodeUrl, setWalletQrCodeUrl] = useState(null);
   const [stakeQrCodeUrl, setStakeQrCodeUrl] = useState(null);
   const [stakeTxValidated, setStakeTxValidated] = useState(false);
@@ -211,7 +210,6 @@ const CreateContract = () => {
       if (!multisigResult.success) throw new Error(multisigResult.error || "Failed to create multisig");
 
       setMultisigAddress(multisigResult.multisig_address);
-      setRedeemScript(multisigResult.redeemScript || "");
 
       // 2. Stake QR
       const amount = Number(stake).toFixed(8);
@@ -299,8 +297,6 @@ const CreateContract = () => {
     e.preventDefault();
     if (!walletConnected || !signature) return setError("Please connect and sign first");
     if (!stakeTxValidated) return setError("Please validate the stake transaction");
-    if (!redeemScript || !/^[0-9a-fA-F]+$/.test(redeemScript))
-      return setError("Invalid redeemScript. Please regenerate the multisig address.");
 
     setLoading(true);
     console.log("CreateContract: Submitting form", {
@@ -315,7 +311,6 @@ const CreateContract = () => {
       multisigAddress,
       transactionId,
       signature,
-      redeemScript,
     });
 
     const validationResult = await validateContractCreation(
