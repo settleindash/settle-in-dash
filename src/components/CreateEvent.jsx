@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useEvents } from "../hooks/useEvents";
+import { useContracts } from "../hooks/useContracts";
 import { categories } from "../utils/categories";
 import { validateEventCreation } from "../utils/validation";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 import TermsSummary from "./TermsSummary";
-import { Html5Qrcode } from "html5-qrcode";
 import QRCode from "qrcode";
 
 const CreateEvent = () => {
+  const { verifySignature, loading: apiLoading } = useContracts();
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState(categories[0] || "");
   const [eventDate, setEventDate] = useState("");
@@ -19,221 +20,98 @@ const CreateEvent = () => {
   const [manualSignature, setManualSignature] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [transactionQrCode, setTransactionQrCode] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
+  const [walletQrCodeUrl, setWalletQrCodeUrl] = useState(null); // ← renamed like CreateContract
   const [loading, setLoading] = useState(false);
   const [walletConnected, setWalletConnected] = useState(false);
   const { createEvent, loading: eventLoading } = useEvents();
   const navigate = useNavigate();
 
-  // Set minimum date to 5 minutes from now
   const minDateTime = new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16);
 
-  // Handle adding a new outcome field
-  const addOutcome = () => {
-    setPossibleOutcomes([...possibleOutcomes, ""]);
-    console.log("CreateEvent: Added new outcome field");
-  };
-
-  // Handle removing an outcome field
+  const addOutcome = () => setPossibleOutcomes([...possibleOutcomes, ""]);
   const removeOutcome = (index) => {
     if (possibleOutcomes.length > 2) {
       setPossibleOutcomes(possibleOutcomes.filter((_, i) => i !== index));
-      console.log("CreateEvent: Removed outcome at index:", index);
     }
   };
-
-  // Handle outcome change
   const handleOutcomeChange = (index, value) => {
     const newOutcomes = [...possibleOutcomes];
     newOutcomes[index] = value;
     setPossibleOutcomes(newOutcomes);
-    console.log(`CreateEvent: Outcome ${index} changed to:`, value);
   };
 
-  // Start QR scanner for signature
-  const startQRScanner = async () => {
-    if (!document.getElementById("qr-reader-event")) {
-      setError("QR reader element not found. Please refresh the page.");
-      return;
+  // Connect wallet & show QR (same as CreateContract)
+  const connectWallet = async () => {
+    if (!eventWalletAddress) return setError("Please enter your wallet address");
+    if (!/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(eventWalletAddress)) {
+      return setError("Invalid Dash testnet address (must start with 'y')");
     }
-    const qrReader = new Html5Qrcode("qr-reader-event");
-    setIsScanning(true);
-    setLoading(true);
-    try {
-      await qrReader.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        async (decodedText) => {
-          console.log("CreateEvent: QR decodedText:", decodedText);
-          if (decodedText.startsWith("signmessage:")) {
-            const [, address, message, sig] = decodedText.split(":");
-            console.log("CreateEvent: QR parsed:", { address, message, sig });
-            if (address === eventWalletAddress && message === `SettleInDash:${eventWalletAddress}`) {
-              const response = await fetch("https://settleindash.com/api/events.php?action=verify_signature", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  address,
-                  message,
-                  signature: sig,
-                }),
-              });
-              const result = await response.json();
-              console.log("CreateEvent: startQRScanner request:", { address, message, signature: sig });
-              console.log("CreateEvent: startQRScanner response:", result);
-              if (result.isValid) {
-                setSignature(sig);
-                setWalletConnected(true);
-                setMessage("Signature captured! Proceed with event creation.");
-                qrReader.stop().then(() => {
-                  setIsScanning(false);
-                  setTransactionQrCode(null);
-                  setLoading(false);
-                });
-              } else {
-                setError(result.message || result.error || "Invalid signature from QR code");
-                qrReader.stop().then(() => {
-                  setIsScanning(false);
-                  setLoading(false);
-                });
-              }
-            } else {
-              setError("Invalid QR code: Address or message does not match");
-              qrReader.stop().then(() => {
-                setIsScanning(false);
-                setLoading(false);
-              });
-            }
-          } else {
-            setError(
-              `Invalid QR code format. Expected a signature for <code>SettleInDash:${eventWalletAddress}</code>. Use Dash Core (Tools &gt; Sign Message).`
-            );
-            qrReader.stop().then(() => {
-              setIsScanning(false);
-              setLoading(false);
-            });
-          }
-        },
-        (error) => {
-          console.warn("CreateEvent: QR Scan error:", error);
-          setError(`Failed to scan signature QR code: ${error}. Try entering signature manually.`);
-          setIsScanning(false);
-          setLoading(false);
-        }
-      );
-    } catch (err) {
-      setError(`Failed to start QR scanner: ${err.message}`);
-      setIsScanning(false);
-      setLoading(false);
-      console.error("CreateEvent: QR scanner error", err);
-    }
-  };
 
-  // Verify manual signature
-  const verifyManualSignature = async () => {
-    if (!manualSignature) {
-      setError("Please enter a signature");
-      return;
-    }
     setLoading(true);
+    setError("");
     try {
-      const response = await fetch("https://settleindash.com/api/events.php?action=verify_signature", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: eventWalletAddress,
-          message: `SettleInDash:${eventWalletAddress}`,
-          signature: manualSignature,
-        }),
-      });
-      const result = await response.json();
-      console.log("CreateEvent: verifyManualSignature request:", {
-        address: eventWalletAddress,
-        message: `SettleInDash:${eventWalletAddress}`,
-        signature: manualSignature,
-      });
-      console.log("CreateEvent: verifyManualSignature response:", result);
-      if (result.isValid) {
-        setSignature(manualSignature);
-        setWalletConnected(true);
-        setMessage("Signature captured! Proceed with event creation.");
-        setManualSignature("");
-        setTransactionQrCode(null);
-      } else {
-        setError(result.message || result.error || "Failed to verify signature");
-      }
+      const text = `SettleInDash:${eventWalletAddress}`;
+      const url = await QRCode.toDataURL(text);
+      setWalletQrCodeUrl(url);
+      setMessage(`Sign the message "SettleInDash:${eventWalletAddress}" in Dash Core → Tools → Sign Message`);
     } catch (err) {
-      setError("Failed to verify signature: " + err.message);
-      console.error("CreateEvent: Manual signature verification error", err);
+      setError("Failed to generate QR code");
     } finally {
       setLoading(false);
     }
   };
 
-  // Prompt for signature
-  const handleSignaturePrompt = async () => {
-    setError("");
-    setMessage("");
-    setLoading(true);
-    if (!eventWalletAddress || !/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(eventWalletAddress)) {
-      setError("Invalid Dash testnet wallet address (must start with 'y', 26-35 characters)");
-      console.log("CreateEvent: Validation failed - invalid wallet address");
-      setLoading(false);
+  // Verify signature — EXACT same logic as CreateContract (with retries)
+  const verifyManualSignature = async () => {
+    if (!manualSignature.trim()) {
+      setError("Please enter a signature");
       return;
     }
-    try {
-      const qrCodeUrl = await QRCode.toDataURL(`signmessage:${eventWalletAddress}:SettleInDash:${eventWalletAddress}:`);
-      setTransactionQrCode(qrCodeUrl);
-      setMessage(`Please sign the message 'SettleInDash:${eventWalletAddress}' in Dash Core (Tools &gt; Sign Message) or enter the signature manually below.`);
-      setLoading(false);
-    } catch (err) {
-      setError("Failed to generate signature QR code: " + err.message);
-      console.error("CreateEvent: QR code generation error", err);
-      setLoading(false);
+
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    const isValid = await verifySignature(eventWalletAddress, manualSignature.trim());
+
+    if (isValid) {
+      setSignature(manualSignature.trim());
+      setWalletConnected(true);
+      setMessage("Wallet connected and signature verified!");
+      setManualSignature("");
+      setWalletQrCodeUrl(null);
+    } else {
+      setError("Invalid signature");
     }
+
+    setLoading(false);
   };
 
-  
-    const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!walletConnected) return setError("Please connect and sign your wallet first");
+
     setLoading(true);
-    console.log("CreateEvent: Form submitted:", { title, category, eventDate, possibleOutcomes, oracleSource, eventWalletAddress, signature });
     setError("");
 
-    // Validate inputs using validateEventCreation
-    const validationData = {
+    const validOutcomes = possibleOutcomes.filter((o) => o.trim());
+    if (validOutcomes.length < 2) return setError("At least 2 outcomes required");
+
+    const eventTime = new Date(`${eventDate}:00+02:00`);
+    if (eventTime < new Date()) return setError("Event must be in the future");
+
+    const validationResult = await validateEventCreation({
       title,
       category,
-      event_date: eventDate ? new Date(`${eventDate}:00+02:00`).toISOString() : "",
-      possible_outcomes: possibleOutcomes.filter(o => o.trim()),
+      event_date: eventTime.toISOString(),
+      possible_outcomes: validOutcomes,
       oracle_source: oracleSource || null,
       event_wallet_address: eventWalletAddress,
       signature,
-    };
-    console.log("CreateEvent: Validating event data:", validationData);
-    const validationResult = await validateEventCreation(validationData);
-    console.log("CreateEvent: Validation result:", validationResult);
+    });
+
     if (!validationResult.isValid) {
-      setError(validationResult.message || "Invalid event data");
-      console.log("CreateEvent: Validation failed:", validationResult.message);
-      setLoading(false);
-      return;
-    }
-
-    // Ensure at least two non-empty outcomes
-    const validOutcomes = possibleOutcomes.filter((outcome) => outcome.trim() !== "");
-    if (validOutcomes.length < 2) {
-      setError("At least two non-empty outcomes are required");
-      console.log("CreateEvent: Validation failed: Fewer than two outcomes");
-      setLoading(false);
-      return;
-    }
-
-    const eventTime = new Date(`${eventDate}:00+02:00`);
-    if (eventTime < new Date()) {
-      setError("Event date must be in the future");
-      console.log("CreateEvent: Validation failed: Event date in the past");
+      setError(validationResult.message);
       setLoading(false);
       return;
     }
@@ -248,17 +126,14 @@ const CreateEvent = () => {
         event_wallet_address: eventWalletAddress,
         signature,
       });
-      console.log("CreateEvent: createEvent result:", result);
+
       if (result.error) {
         setError(result.error);
-        console.log("CreateEvent: createEvent failed:", result.error);
       } else {
-        console.log("CreateEvent: Event created successfully, event_id:", result.event_id);
         navigate("/marketplace");
       }
     } catch (err) {
-      setError("Failed to create event: " . err.message);
-      console.error("CreateEvent: Event creation error", err);
+      setError("Failed to create event: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -391,85 +266,65 @@ const CreateEvent = () => {
             />
           </div>
 
+          {/* Wallet Connection — now identical to CreateContract */}
           <div className="mb-6">
-            <label className="block text-lg sm:text-xl font-bold text-primary mb-2">
-              Wallet Signature
-            </label>
+            <label className="block text-lg font-bold text-primary mb-2">Wallet Signature</label>
             <button
               type="button"
-              className="mt-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
-              onClick={handleSignaturePrompt}
-              disabled={isScanning || !eventWalletAddress || loading || walletConnected}
-              aria-label="Generate QR code for signature"
+              className="bg-green-500 text-white px-6 py-3 rounded hover:bg-green-600 disabled:opacity-50"
+              onClick={connectWallet}
+              disabled={!eventWalletAddress || walletConnected || loading}
             >
-              {walletConnected ? "Wallet Connected" : "Sign with QR Code or Enter Signature"}
+              {walletConnected
+                ? `Connected: ${eventWalletAddress.slice(0, 8)}...${eventWalletAddress.slice(-6)}`
+                : "Connect Wallet & Sign"}
             </button>
-            {transactionQrCode && (
-              <div className="mt-4">
-                <p className="text-gray-700 text-sm mb-2">
-                  Please sign the message <code>SettleInDash:{eventWalletAddress}</code> in Dash Core (Tools &gt; Sign Message) or enter the signature manually below.
+
+            {walletQrCodeUrl && !walletConnected && (
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-700 mb-4">
+                  Sign this message in <strong>Dash Core → Tools → Sign Message</strong>:
+                  <br />
+                  <code className="bg-gray-200 px-2 py-1 rounded text-sm break-all">
+                    SettleInDash:{eventWalletAddress}
+                  </code>
                 </p>
-                <img src={transactionQrCode} alt="QR Code" className="w-64 h-64 mx-auto" />
-                <div className="mt-4">
-                  <label htmlFor="manualSignature" className="block text-sm text-gray-700 mb-2">
-                    Enter signature manually:
-                  </label>
+                <img src={walletQrCodeUrl} alt="Sign message QR" className="w-64 h-64 mx-auto border" />
+
+                <div className="mt-6">
+                  <label className="block text-sm font-medium mb-2">Paste signature here:</label>
                   <input
-                    id="manualSignature"
                     type="text"
-                    className="border p-2 rounded w-full text-sm mb-2"
+                    className="border p-3 rounded w-full mb-3"
                     value={manualSignature}
                     onChange={(e) => setManualSignature(e.target.value)}
-                    placeholder="Paste signature here"
-                    aria-label="Manual signature input"
+                    placeholder="H1Abc...="
                   />
                   <button
                     type="button"
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
                     onClick={verifyManualSignature}
-                    disabled={loading || isScanning}
-                    aria-label="Verify manual signature"
+                    disabled={loading || apiLoading}
+                    className="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700"
                   >
                     Verify Signature
                   </button>
                 </div>
               </div>
             )}
-            <div
-              id="qr-reader-event"
-              style={{ width: "300px", height: "300px", display: isScanning ? "block" : "none", margin: "0 auto" }}
-            ></div>
-          </div>
-
-          <div className="mb-6">
-            <label htmlFor="oracleSource" className="block text-lg sm:text-xl font-bold text-primary mb-2">
-              Oracle Source (Optional)
-            </label>
-            <input
-              id="oracleSource"
-              type="text"
-              className="border p-2 rounded w-full text-sm sm:text-base"
-              value={oracleSource}
-              onChange={(e) => {
-                console.log("CreateEvent: Oracle source changed:", e.target.value);
-                setOracleSource(e.target.value);
-              }}
-              placeholder="Enter oracle source (e.g., SportsAPI)"
-              aria-label="Oracle source"
-            />
           </div>
 
           {error && <p className="text-red-500 text-sm">{error}</p>}
-          {message && <p className="text-green-500 text-sm">{message}</p>}
+          {message && <p className="text-green-600 text-sm">{message}</p>}
+
           <button
             type="submit"
-            className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 disabled:opacity-50 text-sm sm:text-base"
             disabled={loading || eventLoading || !walletConnected}
-            aria-label="Create Event"
+            className="w-full bg-orange-500 text-white py-4 rounded hover:bg-orange-600 disabled:opacity-50 text-lg font-bold"
           >
-            {loading || eventLoading ? "Creating..." : "Create Event"}
+            {loading || eventLoading ? "Creating Event..." : "Create Event"}
           </button>
         </form>
+
         <TermsSummary />
       </main>
     </div>

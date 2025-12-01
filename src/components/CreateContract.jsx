@@ -105,8 +105,6 @@ const CreateContract = () => {
 
   const minDateTime = new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16);
 
-  console.log("network", NETWORK);
-
   // -----------------------------------------------------------------
   // Wallet connection
   // -----------------------------------------------------------------
@@ -347,7 +345,6 @@ const CreateContract = () => {
         odds: Number(odds),
         acceptance_deadline: new Date(`${acceptanceDeadline}:00+02:00`).toISOString(),
         multisig_address: multisigAddress,
-        //redeem_script: redeemScript,
         refund_transaction_id: "",
         creator_public_key: creatorPublicKey,
         transaction_id: transactionId,

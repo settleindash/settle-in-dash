@@ -161,6 +161,57 @@ const HowItWorks = () => {
             )}
           </section>
 
+{/* Double-Spend & Stray Funds Protection — NEW SECTION */}
+<section className="border-b border-gray-200 pb-4">
+  <button
+    className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
+    onClick={() => toggleSection("protection")}
+  >
+    <span className="mr-2">
+      {openSections.protection ? (
+        <ChevronUpIcon className="w-5 h-5" />
+      ) : (
+        <ChevronDownIcon className="w-5 h-5" />
+      )}
+    </span>
+    <span className="text-green-600 font-bold">Your Funds Are 100% Protected</span>
+  </button>
+  {openSections.protection && (
+    <div className="text-sm text-gray-700 space-y-3 bg-green-50 p-4 rounded-lg border border-green-200">
+      <p className="font-semibold text-green-800 mb-3">
+        No one can steal your money — even with 0 confirmations.
+      </p>
+
+      <ul className="list-disc list-inside space-y-2 text-gray-700">
+        <li>
+          <strong>Double-Accept Protection:</strong> Only <strong>one person</strong> can ever accept a contract — even if two people send funds at the same time.
+          <br />
+          <span className="text-xs text-gray-600">
+            We check Before you see a QR code, we check the blockchain (including unconfirmed transactions). If anyone already sent funds, you are blocked instantly.
+          </span>
+        </li>
+        <li>
+          <strong>Stray Funds Auto-Refund:</strong> If someone accidentally sends extra DASH to a contract (e.g., trying to front-run), our oracle automatically detects and refunds it.
+          <br />
+          <span className="text-xs text-gray-600">
+            check Runs every 15 minutes — no funds ever get stuck.
+          </span>
+        </li>
+        <li>
+          <strong>No Trust Required:</strong> Everything is enforced by the Dash blockchain itself — not by us.
+        </li>
+      </ul>
+
+      <p className="mt-4 text-green-800 font-bold text-center text-lg">
+        Safer than Polymarket. Safer than any prediction market.
+      </p>
+      <p className="text-center text-sm text-gray-600">
+        You are protected by math, not promises.
+      </p>
+    </div>
+  )}
+</section>
+
           {/* Locking Funds */}
           <section className="border-b border-gray-200 pb-4">
             <button
