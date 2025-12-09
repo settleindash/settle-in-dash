@@ -95,8 +95,15 @@ useEffect(() => {
   if (constantsLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><p>Loading...</p></div>;
   if (constantsError || !constants) return <div className="min-h-screen bg-background text-red-500 text-center p-8"><p>Failed to load config</p></div>;
 
-  const { NETWORK } = constants;
-  const eventTitleToDisplay = eventTitle || eventData?.title || "Contract Details";
+//const { NETWORK, ORACLE_PUBLIC_KEY } = constants;
+
+const NETWORK = constants?.NETWORK || '';
+const ORACLE_PUBLIC_KEY = constants?.ORACLE_PUBLIC_KEY || '';
+
+const eventTitleToDisplay = eventTitle || eventData?.title || "Contract Details";
+
+console.log("ORACLE_PUBLIC_KEY =", ORACLE_PUBLIC_KEY);
+console.log("NETWORK =", NETWORK);
 
   // WALLET CONNECTION
   const connectWallet = async () => {
@@ -143,37 +150,44 @@ const verifyManualSignature = async () => {
   }
 };
 
-  // GENERATE STAKE QR CODE — 0-conf protected
-  const generateStakeQrCode = async () => {
-    if (!walletConnected || !signature) return setError("Connect wallet first");
-    if (contract.status !== "open") return setError("Contract no longer open");
+  // GENERATE STAKE QR CODE
+const generateStakeQrCode = async () => {
+  if (!walletConnected || !signature) return setError("Connect wallet first");
+  if (contract.status !== "open") return setError("Contract no longer open");
 
-    const stake = accepterStake(contract);
-    if (!stake || !contract.multisig_address) return setError("Missing data");
+  console.log("creatorStake =", Number(contract.stake));
+  console.log("stakeToSend =", Number(accepterStake(contract)));
 
-    try {
-      setLoading(true);
-      setError("");
+  const creatorStake = Number(contract.stake) || 0;
+  const stakeToSend = Number(accepterStake(contract)) || 0;
 
-      const result = await listUnspent(contract.multisig_address, 0);
-      if (result.success && result.data?.length > 0) {
-        const total = result.total_dash || 0;
-        if (total >= Number(stake) * 0.9) {
-          setError("Someone already sent funds. Refresh page.");
-          return;
-        }
+  if (!contract.multisig_address) return setError("Missing multisig address");
+
+  try {
+    setLoading(true);
+    setError("");
+
+    const result = await listUnspent(contract.multisig_address, 0);
+    if (result.success) {
+      const total = result.total_amount || 0;
+      const tolerance = 0.001;
+
+      if (total > creatorStake + tolerance) {
+        setError("Someone is already accepting this contract (extra funds detected). Refresh.");
+        return;
       }
-
-      const amount = Number(stake).toFixed(8);
-      const url = await QRCode.toDataURL(`dash:${contract.multisig_address}?amount=${amount}`);
-      setStakeQrCodeUrl(url);
-      setMessage(`Send ${amount} DASH — you are first!`);
-    } catch (err) {
-      setError("QR failed: " + err.message);
-    } finally {
-      setLoading(false);
     }
-  };
+
+    const amount = stakeToSend.toFixed(8);
+    const url = await QRCode.toDataURL(`dash:${contract.multisig_address}?amount=${amount}`);
+    setStakeQrCodeUrl(url);
+    setMessage(`Send ${amount} DASH — you are first!`);
+  } catch (err) {
+    setError("Check failed: " + err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // VALIDATE STAKE TRANSACTION
   const handleValidateStakeTransaction = async () => {
@@ -201,43 +215,78 @@ const verifyManualSignature = async () => {
     }
   };
 
-  // ACCEPT CONTRACT
-  const handleAcceptSubmission = async () => {
-    if (!walletConnected || !signature || !stakeTxValidated) return;
+// ACCEPT CONTRACT — FINAL, WORKING VERSION
+const handleAcceptSubmission = async () => {
+  console.log("Accept clicked — starting!");
+  if (!walletConnected || !signature || !stakeTxValidated) return;
 
-    try {
-      setLoading(true);
-      setError("");
+  if (!ORACLE_PUBLIC_KEY) {
+    setError("Oracle configuration missing. Please refresh.");
+    return;
+  }
 
-      const result = await acceptContract(contract.contract_id, {
-        accepterWalletAddress,
-        signature,
-        message: `SettleInDash:${accepterWalletAddress}`,
-        accepter_public_key: accepterPublicKey,
-        accepter_transaction_id: accepterTransactionId,
-      });
+  try {
+    setLoading(true);
+    setError("");
 
-      if (result.success) {
-        setMessage("Contract accepted!");
-        onAcceptSuccess?.();
-        // reset
-        setAccepterWalletAddress("");
-        setAccepterPublicKey("");
-        setSignature("");
-        setAccepterTransactionId("");
-        setStakeTxValidated(false);
-        setStakeQrCodeUrl(null);
-        setWalletConnected(false);
-        if (navigateTo) navigate(navigateTo);
-      } else {
-        setError(result.error || "Failed");
-      }
-    } catch (err) {
-      setError("Accept failed: " + err.message);
-    } finally {
-      setLoading(false);
+        console.log("Contract object keys:", Object.keys(contract));
+        console.log("creatorPublicKey =", contract.creatorPublicKey);
+        console.log("creator_public_key =", contract.creator_public_key);
+
+    // Generate NEW 3-of-3 multisig
+    const multisigResponse = await fetch("https://settleindash.com/api/contracts.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "create_multisig",
+        data: {
+          public_keys: [
+            contract.creator_public_key,
+            accepterPublicKey,
+            ORACLE_PUBLIC_KEY,           // ← NOW IN SCOPE!
+          ],
+          required_signatures: 3,
+          network: NETWORK
+        }
+      })
+    });
+
+    const multisigResult = await multisigResponse.json();
+    if (!multisigResult.success) {
+      throw new Error(multisigResult.error || "Failed to create new multisig");
     }
-  };
+
+    // Accept contract with new multisig
+    const result = await acceptContract(contract.contract_id, {
+      accepterWalletAddress,
+      signature,
+      message: `SettleInDash:${accepterWalletAddress}`,  // ← YOU NEED THIS TOO!
+      accepter_public_key: accepterPublicKey,
+      accepter_transaction_id: accepterTransactionId,
+      new_multisig_address: multisigResult.multisig_address
+    });
+
+    if (result.success) {
+      setMessage("Contract accepted successfully!");
+      onAcceptSuccess?.();
+      // Reset form
+      setAccepterWalletAddress("");
+      setAccepterPublicKey("");
+      setSignature("");
+      setAccepterTransactionId("");
+      setStakeTxValidated(false);
+      setStakeQrCodeUrl(null);
+      setWalletConnected(false);
+      if (navigateTo) navigate(navigateTo);
+    } else {
+      setError(result.error || "Failed");
+    }
+  } catch (err) {
+    setError("Accept failed: " + err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
     // -----------------------------------------------------------------
     // Render

@@ -63,18 +63,24 @@ export const useContracts = () => {
   );
 
   // 3. acceptContract
-  const acceptContract = useCallback(
-    async (contractId, payload) => {
-      const result = await post("accept_contract", { contract_id: contractId, ...payload });
-      if (result.success) {
-        setContracts((prev) =>
-          prev.map((c) => (c.contract_id === contractId ? { ...c, ...result.data } : c))
-        );
-      }
-      return result;
-    },
-    [post]
-  );
+const acceptContract = useCallback(
+  async (contractId, payload) => {
+    const result = await post("accept_contract", {
+      contract_id: contractId,
+      ...payload
+    });
+
+    if (result.success) {
+      setContracts((prev) =>
+        prev.map((c) =>
+          c.contract_id === contractId ? { ...c, ...result.data } : c
+        )
+      );
+    }
+    return result;
+  },
+  [post]
+);
 
   // 4. validateTransaction
   const validateTransaction = useCallback(
