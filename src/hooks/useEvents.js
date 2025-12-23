@@ -59,7 +59,7 @@ export const useEvents = () => {
   }, []);
 
   const getEvents = fetchEvents;
-
+/*
   // FIXED: getEvent uses memoized fetchEvents
   const getEvent = useCallback(async (event_id) => {
     if (!event_id) return null;
@@ -74,6 +74,21 @@ export const useEvents = () => {
       return null;
     }
   }, [fetchEvents]);
+
+*/
+
+  const getEvent = useCallback(async (event_id) => {
+  if (!event_id) return null;
+  try {
+    const data = await fetchEvents({ event_id }); // calls backend with event_id
+    const event = data.find(e => e.event_id === event_id);
+    return event || null;
+  } catch (err) {
+    console.error("getEvent failed:", err);
+    return null;
+  }
+}, [fetchEvents]);
+
 
   return useMemo(() => ({
     events,

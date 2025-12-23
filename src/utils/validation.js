@@ -3,22 +3,24 @@ export const SIGNATURE_MESSAGE_PREFIX = "SettleInDash:";
 export const parseOutcomes = (outcomes) => {
   if (!outcomes) return [];
   try {
-    if (typeof outcomes === "string") {
-      const decoded = JSON.parse(outcomes);
-      if (Array.isArray(decoded)) return decoded;
-      return outcomes.split(",").map((o) => o.trim()).filter((o) => o !== "");
-    } else if (Array.isArray(outcomes)) {
-      return outcomes.filter((o) => o !== "");
+    if (Array.isArray(outcomes)) {
+      return outcomes.map(o => String(o).trim()).filter(o => o);
     }
-    return [];
+    if (typeof outcomes === "string") {
+      const parsed = JSON.parse(outcomes);
+      if (Array.isArray(parsed)) {
+        return parsed.map(o => String(o).trim()).filter(o => o);
+      }
+      return outcomes.split(",").map(o => o.trim()).filter(o => o);
+    }
   } catch (error) {
-    console.error("parseOutcomes: Failed to parse outcomes:", outcomes, error);
-    return typeof outcomes === "string" ? outcomes.split(",").map((o) => o.trim()).filter((o) => o !== "") : [];
+    console.error("parseOutcomes error:", error, outcomes);
   }
+  return [];
 };
 
 export const validateEventCreation = async (data) => {
-  const { title, category, event_date, possible_outcomes, oracle_source, event_wallet_address, signature } = data;
+  const { title, category, event_date, possible_outcomes, event_wallet_address, signature } = data;
   console.log("validateEventCreation: Validating data:", data);
   const errors = [];
 
@@ -61,11 +63,6 @@ export const validateEventCreation = async (data) => {
     }
   }
 
-  // Validate oracle_source
-  if (oracle_source && oracle_source.length > 255) {
-    errors.push("Oracle source must be 255 characters or less");
-  }
-
   // Validate event_wallet_address
   if (event_wallet_address && !/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(event_wallet_address)) {
     errors.push("Invalid Dash testnet wallet address (must start with 'y', 26-35 characters)");
@@ -89,7 +86,7 @@ export const validateEventCreation = async (data) => {
 export const validateContractCreation = async (data, selectedEvent) => {
   const errors = [];
 
-  const requiredFields = ['eventId', 'outcome', 'positionType', 'stake', 'odds', 'walletAddress', 'expiration_date', 'signature'];
+  const requiredFields = ['eventId', 'outcome', 'positionType', 'stake', 'odds', 'walletAddress', 'expiration_date', 'signature', 'description'];
   requiredFields.forEach((field) => {
     if (!data[field] || (typeof data[field] === "string" && data[field].trim() === "")) {
       errors.push(`Missing or empty required field: ${field}`);
@@ -158,60 +155,4 @@ export const validateDashPublicKey = (publicKey) => {
     return false;
   }
   return true;
-};
-
-
-
-export const validateWalletAddress = async (address, network, signature = null, isEvent = false) => {
-  if (!address || !/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(address)) {
-    console.error("validateWalletAddress: Invalid DASH testnet wallet address format:", address);
-    return { isValid: false, message: "Invalid DASH testnet wallet address. Must be 26-35 characters starting with 'y'." };
-  }
-
-  if (!signature) {
-    try {
-      const qrCode = await QRCode.toDataURL(`signmessage:${address}:SettleInDash:${address}:`);
-      return { isValid: false, qrCode, message: "Please sign the message with your wallet." };
-    } catch (err) {
-      console.error("validateWalletAddress: QR code generation failed:", err);
-      return { isValid: false, message: "Failed to generate QR code for signing." };
-    }
-  }
-
-  try {
-    const endpoint = isEvent
-      ? "https://settleindash.com/api/events.php"
-      : "https://settleindash.com/api/contracts.php";
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "verify_signature",
-        data: {
-          address,
-          message: `SettleInDash:${address}`,
-          signature,
-        },
-      }),
-    });
-    const responseText = await response.text();
-    console.log("validateWalletAddress: Request:", {
-      action: "verify_signature",
-      data: { address, message: `SettleInDash:${address}`, signature },
-    });
-    console.log("validateWalletAddress: Response:", responseText, "status:", response.status);
-    if (!response.ok) {
-      throw new Error(`HTTP error: ${response.status} - ${responseText}`);
-    }
-    const result = JSON.parse(responseText);
-    if (result.isValid) {
-      return { isValid: true, message: "Wallet address and signature validated." };
-    } else {
-      console.error("validateWalletAddress: Signature verification failed:", result.message);
-      return { isValid: false, message: result.message || "Invalid signature." };
-    }
-  } catch (err) {
-    console.error("validateWalletAddress: Backend verification failed:", err);
-    return { isValid: false, message: "Failed to verify wallet address: " + err.message };
-  }
 };

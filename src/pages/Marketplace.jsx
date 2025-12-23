@@ -58,7 +58,18 @@ const Marketplace = () => {
                   </Link>
                 </h2>
                 <p className="text-sm text-gray-600 mb-1">
-                  <strong>Date:</strong> {new Date(event.event_date).toLocaleString("en-GB", { timeZone: "Europe/Paris" })}
+                  <strong>Date:</strong>{' '}
+                  <span className="text-gray-800">
+                    {event.event_date
+                      ? new Date(event.event_date).toLocaleString(undefined, {
+                          dateStyle: "full",
+                          timeStyle: "short",
+                        })
+                      : "N/A"}
+                  </span>
+                </p>
+                <p className="text-xs text-gray-500 -mt-3">
+                  (your local time)
                 </p>
                 <p className="text-sm text-gray-600 mb-1">
                   <strong>Category:</strong> {event.category || "N/A"}

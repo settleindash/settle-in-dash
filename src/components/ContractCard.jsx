@@ -21,6 +21,7 @@ const ContractCard = ({
 
   // HOOKS
   const { constants, loading: constantsLoading, error: constantsError } = useConstants();
+  
   const {
     acceptContract,
     validateTransaction,
@@ -31,6 +32,8 @@ const ContractCard = ({
     getTransactionInfo,
     verifySignature
   } = useContracts();
+
+
   const { getEvent } = useEvents();
 
   // LOCAL STATE
@@ -200,7 +203,7 @@ const generateStakeQrCode = async () => {
         txid: accepterTransactionId,
         expected_destination: contract.multisig_address,
         expected_amount: accepterStake(contract),
-        min_confirmations: 1
+        min_confirmations: 0
       });
       if (result.success) {
         setStakeTxValidated(true);
@@ -243,7 +246,7 @@ const handleAcceptSubmission = async () => {
           public_keys: [
             contract.creator_public_key,
             accepterPublicKey,
-            ORACLE_PUBLIC_KEY,           // ← NOW IN SCOPE!
+            ORACLE_PUBLIC_KEY,
           ],
           required_signatures: 3,
           network: NETWORK
@@ -310,66 +313,270 @@ const handleAcceptSubmission = async () => {
           {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
           {message && <p className="text-green-500 text-sm mb-4">{message}</p>}
 
+          {/* EVENT DESCRIPTION — Dedicated prominent box */}
+          {eventData?.description ? (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h3 className="text-md font-semibold text-gray-700 mb-2">Event Description</h3>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                {eventData.description}
+              </p>
+            </div>
+          ) : (
+            // Optional: subtle placeholder if no description
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg opacity-60 border border-gray-200">
+              <p className="text-sm text-gray-500 italic">
+                No event description provided.
+              </p>
+            </div>
+          )}
+
+
           {/* PAYOUTS & ACCEPTANCE DETAILS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Left: Payouts */}
             <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-md font-semibold text-gray-700">Payouts</h3>
+              <h3 className="text-md font-semibold text-gray-700">Acceptance Details</h3>
               <p className="mt-2 text-gray-600">Stake: {contract.stake ? `${contract.stake} DASH` : "Not set"}</p>
-              <p className="mt-2 text-gray-600">Outcome: {contract.outcome || "Not set"}</p>
-              <p className="mt-2 text-gray-600">
-                Creator Fee: {contract.additional_contract_creator ? `${contract.additional_contract_creator} DASH` : "Not set"}
-              </p>
-              <p className="mt-2 text-gray-600">
-                Accepter Fee: {contract.additional_contract_accepter ? `${contract.additional_contract_accepter} DASH` : "Not set"}
-              </p>
-              <p className="mt-2 text-gray-600">
-                Accepter Stake: {contract.accepter_stake ? `${contract.accepter_stake} DASH` : accepterStake(contract) || "Not set"}
+              <p className="mt-2 text-gray-600">Odds: {contract.odds ?? "Not set"}</p>
+              <p className="mt-2 text-gray-600"> Accepter Stake: {contract.accepter_stake ? `${contract.accepter_stake} DASH` : accepterStake(contract) || "Not set"}
+              <p className="mt-2 text-gray-600">Acceptance Deadline: {formatCustomDate(contract.acceptanceDeadline)}</p>
+              <p className="mt-2 text-gray-600">Creator is betting on: {contract.outcome || "Not set"}</p>   
               </p>
             </div>
 
+
+            {/* Possible Outcomes — Slim & modern */}
             <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-md font-semibold text-gray-700">Acceptance Details</h3>
-              <p className="mt-2 text-gray-600">Odds: {contract.odds ?? "Not set"}</p>
-              <p className="mt-2 text-gray-600">Percentage: {contract.percentage ? `${contract.percentage}%` : "Not set"}</p>
-              <p className="mt-2 text-gray-600">Acceptance Deadline: {formatCustomDate(contract.acceptanceDeadline)}</p>
+              <h3 className="text-md font-semibold text-gray-700">Possible Outcomes</h3>
+              <div className="mt-4 pt-4 border-t border-gray-200">  
+                <div className="flex flex-col items-center gap-2">
+                  {(() => {
+                    let outcomes = [];
+
+                    if (eventData?.possible_outcomes) {
+                      if (Array.isArray(eventData.possible_outcomes)) {
+                        outcomes = eventData.possible_outcomes;
+                      } else if (typeof eventData.possible_outcomes === 'string') {
+                        try {
+                          outcomes = JSON.parse(eventData.possible_outcomes.trim());
+                        } catch (e) {
+                          console.error("Failed to parse outcomes:", e);
+                          return <span className="text-xs text-red-500">Invalid format</span>;
+                        }
+                      }
+                    }
+
+                    if (outcomes.length === 0) {
+                      return <span className="text-sm text-gray-500 italic">Not specified</span>;
+                    }
+
+                    return outcomes.map((outcome, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-900 border border-gray-300"
+                      >
+                        {String(outcome).trim()}
+                      </span>
+                    ));
+                  })()}
+                </div>
+              </div>
             </div>
           </div>
+          
 
           {/* CONTRACT INFO */}
           <div className="mb-6">
             <h3 className="text-md font-semibold text-gray-700 mb-2">Contract Info</h3>
+             <p className="text-gray-600">Event ID: {contract.event_id ?? "Not set"}</p>
             <p className="text-gray-600">Contract ID: {contract.contract_id ?? "Not set"}</p>
-            <p className="text-gray-600">Status: {formatStatus(contract.status)}</p>
-            <p className="mt-2 text-gray-600">Event ID: {contract.event_id ?? "Not set"}</p>
-            <p className="mt-2 text-gray-600">Question: {contract.question ?? "Not set"}</p>
-            <p className="mt-2 text-gray-600">Category: {contract.category ?? "Not set"}</p>
-            <p className="mt-2 text-gray-600">Created At: {formatCustomDate(contract.created_at)}</p>
-            <p className="mt-2 text-gray-600">
-              Event Time: {eventLoading ? "Loading..." : eventError ? "Error" : eventData ? formatCustomDate(eventData.event_date) : "Not set"}
+            <p className="text-gray-600">Question: {contract.question ?? "Not set"}</p>
+            <p className="text-gray-600">Category: {contract.category ?? "Not set"}</p>
+            <p className="text-gray-600">Created At: {formatCustomDate(contract.created_at)}</p>
+
+            <p className="text-gray-600">
+              Event Time: {eventLoading ? "Loading..." : eventError ? "Error" : eventData ? formatCustomDate(eventData.event_date) : "Not set"}{' '}
+              <span className="text-xs text-gray-500">(your local time)</span>
             </p>
+
+            <p className="text-gray-600">Status: {formatStatus(contract.status)}</p>
           </div>
 
-          {/* PARTIES */}
+
+          {/* PARTIES & ESCROW */}
           <div className="mb-6">
-            <h3 className="text-md font-semibold text-gray-700 mb-2">Parties</h3>
-            <p className="text-gray-600">Creator Wallet Address: {contract.WalletAddress ?? "Not set"}</p>
-            <p className="text-gray-600">Accepter Wallet Address: {contract.accepterWalletAddress ?? "Not set"}</p>
-            <p className="text-gray-600">Multisig Address: {contract.multisig_address ?? "Not set"}</p>
+            <h3 className="text-md font-semibold text-gray-700 mb-3">Parties & Escrow</h3>
+
+            <div className="space-y-4">
+
+              {/* Always show creator (for accountability) */}
+              <div>
+                <p className="text-sm font-medium text-gray-700">Creator</p>
+                <p className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                  {contract.WalletAddress ?? "Not set"}
+                </p>
+              </div>
+
+              {/* Only show accepter if contract is accepted */}
+              {contract.status === "accepted" && contract.accepterWalletAddress && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Accepter</p>
+                  <p className="text-xs font-mono bg-gray-100 p-2 rounded break-all">
+                    {contract.accepterWalletAddress}
+                  </p>
+                </div>
+              )}
+
+              {/* Escrow Info — tailored by status */}
+              {contract.status === "open" && (
+                <div className="pt-4 border-t border-gray-300">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Escrow Address (2-of-2)</p>
+                  <p className="text-xs text-gray-600 mb-2">
+                    Creator stake is locked here. Accepter must send matching stake to this address.
+                  </p>
+                  <p className="text-xs font-mono bg-blue-50 p-2 rounded break-all border border-blue-200">
+                    {contract.multisig_address || "Not set"}
+                  </p>
+                </div>
+              )}
+
+              {contract.status === "accepted" && (
+                <>
+                  <div className="pt-4 border-t border-gray-300">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Final Escrow (3-of-3 Multisig)</p>
+                    <p className="text-xs text-gray-600 mb-2">
+                      Contains creator stake. Full pot will be controlled from here after resolution.
+                    </p>
+                    <p className="text-xs font-mono bg-green-50 p-2 rounded break-all border border-green-200">
+                      {contract.new_multisig_address || "Not available"}
+                    </p>
+                    {contract.pot_creator_txid && (
+                      <p className="text-xs text-blue-600 mt-2">
+                        Funds moved via:{" "}
+                        <a
+                          href={`https://insight.dash.org/insight/tx/${contract.pot_creator_txid}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                        >
+                          {contract.pot_creator_txid.slice(0, 12)}...
+                        </a>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-300">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Legacy Escrow (2-of-2)</p>
+                    <p className="text-xs text-gray-600 mb-2">
+                      Contains accepter stake only (temporary).
+                    </p>
+                    <p className="text-xs font-mono bg-amber-50 p-2 rounded break-all border border-amber-200">
+                      {contract.multisig_address || "Not set"}
+                    </p>
+                  </div>
+                </>
+              )}
+
+            </div>
           </div>
 
           {/* RESOLUTION DETAILS */}
           <div className="mb-6">
-            <h3 className="text-md font-semibold text-gray-700 mb-2">Resolution Details</h3>
-            <p className="text-gray-600">Creator Winner Choice: {contract.creator_winner_choice ?? "Not set"}</p>
-            <p className="text-gray-600">Creator Winner Reasoning: {contract.creator_winner_reasoning ?? "Not set"}</p>
-            <p className="text-gray-600">Accepter Winner Choice: {contract.accepter_winner_choice ?? "Not set"}</p>
-            <p className="text-gray-600">Accepter Winner Reasoning: {contract.accepter_winner_reasoning ?? "Not set"}</p>
-            <p className="text-gray-600">Resolution: {contract.resolution ?? "Not set"}</p>
-            <p className="text-gray-600">Resolution Reasoning: {contract.resolutionDetails_reasoning ?? "Not set"}</p>
-            <p className="mt-2 text-gray-600">
-              Resolution Timestamp: {formatCustomDate(contract.resolutionDetails_timestamp)}
-            </p>
-            <p className="text-gray-600">Winner: {contract.winner ?? "Not set"}</p>
+            <h3 className="text-md font-semibold text-gray-700 mb-4">Resolution Details</h3>
+
+            <div className="space-y-5">
+
+              {/* Only show party claims if the contract is in resolution phase */}
+              {(contract.status === "settled" || contract.status === "twist") && (
+                <>
+                  {/* Creator Claim */}
+                  {contract.creator_winner_choice && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm font-medium text-gray-800 mb-1">Creator's Claim</p>
+                      <p className="text-sm text-gray-700">
+                        Winner: <strong>{contract.creator_winner_choice}</strong>
+                      </p>
+                      {contract.creator_winner_reasoning && (
+                        <details className="mt-2 text-sm">
+                          <summary className="cursor-pointer text-primary hover:underline">View Reasoning</summary>
+                          <p className="mt-2 text-gray-700 whitespace-pre-wrap bg-white p-3 rounded border">
+                            {contract.creator_winner_reasoning}
+                          </p>
+                        </details>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Accepter Claim */}
+                  {contract.accepter_winner_choice && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm font-medium text-gray-800 mb-1">Accepter's Claim</p>
+                      <p className="text-sm text-gray-700">
+                        Winner: <strong>{contract.accepter_winner_choice}</strong>
+                      </p>
+                      {contract.accepter_winner_reasoning && (
+                        <details className="mt-2 text-sm">
+                          <summary className="cursor-pointer text-primary hover:underline">View Reasoning</summary>
+                          <p className="mt-2 text-gray-700 whitespace-pre-wrap bg-white p-3 rounded border">
+                            {contract.accepter_winner_reasoning}
+                          </p>
+                        </details>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Final Oracle Resolution — most important */}
+              {contract.resolution && (
+                <div className={`p-4 rounded-lg border-2 ${
+                  contract.status === "settled" ? "bg-green-50 border-green-300" : "bg-blue-50 border-blue-300"
+                }`}>
+                  <p className="text-sm font-medium text-gray-800 mb-2">
+                    {contract.status === "settled" ? "Final Resolution" : "Oracle Resolution (Escalated)"}
+                  </p>
+                  <p className="text-lg font-bold text-gray-900">
+                    Outcome: {contract.resolution}
+                  </p>
+                  <p className="text-sm font-semibold text-gray-800 mt-2">
+                    Winner: {contract.winner || "Pending payout"}
+                  </p>
+                  {contract.resolutionDetails_timestamp && (
+                    <p className="text-xs text-gray-600 mt-2">
+                      Resolved on: {formatCustomDate(contract.resolutionDetails_timestamp)}
+                    </p>
+                  )}
+                  {contract.resolutionDetails_reasoning && (
+                    <details className="mt-3 text-sm">
+                      <summary className="cursor-pointer text-primary hover:underline font-medium">Oracle Reasoning</summary>
+                      <p className="mt-2 text-gray-700 whitespace-pre-wrap bg-white p-3 rounded border">
+                        {contract.resolutionDetails_reasoning}
+                      </p>
+                    </details>
+                  )}
+                </div>
+              )}
+
+              {/* Fallback message when nothing has happened yet */}
+              {contract.status === "open" && (
+                <p className="text-sm text-gray-500 italic">
+                  Resolution will appear here after the event date.
+                </p>
+              )}
+
+              {contract.status === "accepted" && !contract.resolution && (
+                <p className="text-sm text-gray-500 italic">
+                  Awaiting event outcome and party claims.
+                </p>
+              )}
+
+              {contract.status === "twist" && !contract.resolution && (
+                <p className="text-sm text-amber-700 font-medium">
+                  Dispute escalated — awaiting oracle resolution.
+                </p>
+              )}
+
+            </div>
           </div>
 
           {/* STATUS MESSAGES */}
@@ -500,20 +707,8 @@ const handleAcceptSubmission = async () => {
                 )}
               </div>
 
-              {/* Multisig & QR codes */}
+              {/* Generate Stake QR Code — EXACTLY LIKE CREATECONTRACT */}
               <div className="mb-6">
-                <label className="block text-lg font-bold text-primary mb-2">
-                  Send your stake to the existing multisig address
-                </label>
-
-                {/* Multisig address already exists — show it */}
-                <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                  <p className="text-xs font-mono bg-white p-2 rounded break-all border">
-                    {contract.multisig_address || "Loading..."}
-                  </p>
-                </div>
-
-                {/* Generate Stake QR Code — EXACTLY LIKE CREATECONTRACT */}
                 <button
                   type="button"
                   className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm w-full font-bold shadow-md disabled:opacity-50"

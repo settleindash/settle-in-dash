@@ -245,7 +245,7 @@ const CreateContract = () => {
               txid,
               expected_destination: expectedDestination,
               expected_amount: Number(expectedAmount),
-              min_confirmations: 1,
+              min_confirmations: 0,
             },
           }),
         });
@@ -343,7 +343,7 @@ const CreateContract = () => {
         position_type: positionType,
         stake: Number(stake),
         odds: Number(odds),
-        acceptance_deadline: new Date(`${acceptanceDeadline}:00+02:00`).toISOString(),
+        cceptance_deadline: new Date(acceptanceDeadline).toISOString(),
         multisig_address: multisigAddress,
         refund_transaction_id: "",
         creator_public_key: creatorPublicKey,
@@ -384,20 +384,46 @@ const CreateContract = () => {
 
         {selectedEvent ? (
           <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-6">
+
             {/* Event Details */}
             <div className="mb-6">
               <label className="block text-lg font-bold text-primary mb-2">Event Details</label>
-              <p className="text-gray-600 text-sm">
-                Event: {selectedEvent.title || "N/A"}<br />
-                Date: {selectedEvent.event_date
-                  ? new Date(selectedEvent.event_date).toLocaleString("en-GB", {
-                      timeZone: "Europe/Paris",
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })
-                  : "N/A"}<br />
-                Category: {selectedEvent.category || "N/A"}
-              </p>
+              
+              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                <div>
+                  <span className="font-medium text-gray-700">Event:</span>
+                  <p className="text-gray-800">{selectedEvent.title || "N/A"}</p>
+                </div>
+
+                  <div>
+                    <span className="font-medium text-gray-700">Event Date & Time:</span>
+                    <p className="text-gray-800">
+                      {selectedEvent.event_date
+                        ? new Date(selectedEvent.event_date).toLocaleString(undefined, {
+                            dateStyle: "full",
+                            timeStyle: "short",
+                          })
+                        : "N/A"}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Shown in your local time zone (stored in UTC)
+                    </p>
+                  </div>
+
+                <div>
+                  <span className="font-medium text-gray-700">Category:</span>
+                  <p className="text-gray-800">{selectedEvent.category || "N/A"}</p>
+                </div>
+
+                {selectedEvent.description && (
+                  <div className="pt-3 border-t border-gray-200">
+                    <span className="font-medium text-gray-700">Description:</span>
+                    <p className="text-gray-700 mt-1 whitespace-pre-wrap text-sm">
+                      {selectedEvent.description}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Wallet Address */}
