@@ -59,23 +59,6 @@ export const useEvents = () => {
   }, []);
 
   const getEvents = fetchEvents;
-/*
-  // FIXED: getEvent uses memoized fetchEvents
-  const getEvent = useCallback(async (event_id) => {
-    if (!event_id) return null;
-    console.log("getEvent called for event_id:", event_id);
-    try {
-      const data = await fetchEvents({ event_id });
-      const event = data?.[0] ?? null;
-      console.log("getEvent result:", event);
-      return event;
-    } catch (err) {
-      console.error("getEvent failed:", err);
-      return null;
-    }
-  }, [fetchEvents]);
-
-*/
 
   const getEvent = useCallback(async (event_id) => {
   if (!event_id) return null;
