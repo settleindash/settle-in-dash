@@ -6,7 +6,6 @@ import { useContracts } from "../hooks/useContracts"; // ← NEW: import this
 import { useConstants } from "../hooks/useConstants";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 import FilterEvents from "../components/FilterEvents.jsx";
-import { categories } from "../utils/categories";
 
 const Marketplace = () => {
   const { events, getEvents, loading: eventsLoading, error: eventsError } = useEvents();
@@ -41,90 +40,127 @@ const Marketplace = () => {
     fetchData();
   }, [fetchData]);
 
-  const renderContent = useCallback((filteredEvents, constants) => {
-    if (!filteredEvents || filteredEvents.length === 0) {
-      return (
-        <div className="text-center py-12 text-gray-600">
-          <p className="text-xl font-semibold mb-4">No upcoming events found</p>
-          <p className="text-sm">Try refreshing or check back later!</p>
-        </div>
-      );
-    }
-
+const renderContent = useCallback((filteredEvents, constants) => {
+  if (!filteredEvents || filteredEvents.length === 0) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mt-6">
-        {filteredEvents.map((event) => {
-          const title = event.title || "Untitled Event";
-          const outcomes = parseOutcomes(event.possible_outcomes);
-
-          // NEW: Calculate liquidity for this event
-          const eventContracts = contracts.filter(c => c.event_id === event.event_id);
-
-          const openContracts = eventContracts.filter(c => c.status === "open");
-          const acceptedContracts = eventContracts.filter(c => c.status === "accepted");
-
-          const totalOpen = openContracts.reduce((sum, c) => sum + Number(c.stake || 0), 0).toFixed(2);
-          const totalAccepted = acceptedContracts.reduce((sum, c) => {
-            return sum + Number(c.stake || 0) + Number(c.accepter_stake || 0);
-          }, 0).toFixed(2);
-
-          return (
-            <div key={event.event_id} className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow">
-              <h2 className="text-lg font-bold mb-3">
-                <Link to={`/orderbook?event_id=${event.event_id}`} className="text-blue-600 hover:underline">
-                  {title}
-                </Link>
-              </h2>
-
-              {/* NEW: Liquidity display - right below title */}
-              <div className="mb-4 text-sm">
-                <p className="text-green-700 font-medium">
-                  Open Liquidity: {contractsLoading ? "Loading..." : totalOpen} DASH
-                </p>
-                <p className="text-purple-700 font-medium">
-                  Accepted Liquidity: {contractsLoading ? "Loading..." : totalAccepted} DASH
-                </p>
-              </div>
-
-              <p className="text-sm text-gray-600 mb-1">
-                <strong>Date:</strong>{" "}
-                <span className="text-gray-800">
-                  {event.event_date
-                    ? new Date(event.event_date).toLocaleString(undefined, {
-                        dateStyle: "full",
-                        timeStyle: "short",
-                      })
-                    : "N/A"}
-                </span>
-              </p>
-              <p className="text-xs text-gray-500 -mt-1 mb-3">(your local time)</p>
-
-              <p className="text-sm text-gray-600 mb-1">
-                <strong>Category:</strong> {event.category || "N/A"}
-              </p>
-              <p className="text-xs text-gray-500 mb-4">ID: {event.event_id}</p>
-
-              {outcomes.length > 0 ? (
-                <div className="space-y-3">
-                  {outcomes.map((outcome) => (
-                    <button
-                      key={outcome}
-                      onClick={() => navigate(`/create-contract?event_id=${event.event_id}&outcome=${encodeURIComponent(outcome)}`)}
-                      className="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 transition-colors"
-                    >
-                      Create Contract: {outcome}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 italic">No outcomes defined</p>
-              )}
-            </div>
-          );
-        })}
+      <div className="text-center py-12 text-gray-600">
+        <p className="text-xl font-semibold mb-4">No upcoming events found</p>
+        <p className="text-sm">Try refreshing or check back later!</p>
       </div>
     );
-  }, [navigate, parseOutcomes, contracts, contractsLoading]);
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mt-6">
+      {filteredEvents.map((event) => {
+        const title = event.title || "Untitled Event";
+        const outcomes = parseOutcomes(event.possible_outcomes);
+
+        // Calculate liquidity & probabilities for this event
+        const eventContracts = contracts.filter(c => c.event_id === event.event_id && c.status === "open");
+
+        const probabilities = outcomes.reduce((acc, outcome) => {
+          const sellContracts = eventContracts.filter(
+            c => c.outcome === outcome && c.position_type === "sell"
+          );
+
+          if (sellContracts.length === 0) {
+            acc[outcome] = null;
+            return acc;
+          }
+
+          const bestOdds = Math.min(...sellContracts.map(c => Number(c.odds || Infinity)));
+
+          if (bestOdds === Infinity || bestOdds <= 1) {
+            acc[outcome] = null;
+          } else {
+            acc[outcome] = (100 / bestOdds).toFixed(0) + "%";
+          }
+
+          return acc;
+        }, {});
+
+        // Liquidity for display
+        const openContracts = contracts.filter(c => c.event_id === event.event_id && c.status === "open");
+        const acceptedContracts = contracts.filter(c => c.event_id === event.event_id && c.status === "accepted");
+
+        const totalOpen = openContracts.reduce((sum, c) => sum + Number(c.stake || 0), 0).toFixed(2);
+        const totalAccepted = acceptedContracts.reduce((sum, c) => {
+          return sum + Number(c.stake || 0) + Number(c.accepter_stake || 0);
+        }, 0).toFixed(2);
+
+        return (
+          <div key={event.event_id} className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow">
+            <h2 className="text-lg font-bold mb-3">
+              <Link to={`/orderbook?event_id=${event.event_id}`} className="text-blue-600 hover:underline">
+                {title}
+              </Link>
+            </h2>
+
+            {/* Liquidity display */}
+            <div className="mb-4 text-sm">
+              <p className="text-green-700 font-medium">
+                Open Liquidity: {contractsLoading ? "Loading..." : totalOpen} DASH
+              </p>
+              <p className="text-purple-700 font-medium">
+                Accepted Liquidity: {contractsLoading ? "Loading..." : totalAccepted} DASH
+              </p>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-1">
+              <strong>Date:</strong>{" "}
+              <span className="text-gray-800">
+                {event.event_date
+                  ? new Date(event.event_date).toLocaleString(undefined, {
+                      dateStyle: "full",
+                      timeStyle: "short",
+                    })
+                  : "N/A"}
+              </span>
+            </p>
+            <p className="text-xs text-gray-500 -mt-1 mb-3">(your local time)</p>
+
+            <p className="text-sm text-gray-600 mb-4">
+              <strong>Category:</strong> {event.category || "N/A"}
+            </p>
+
+            {outcomes.length > 0 ? (
+              <div className="mb-4">
+                <h3 className="text-md font-semibold text-gray-700 mb-3">
+                  Create a Position on:
+                </h3>
+                <div className="space-y-3">
+                  {outcomes.map((outcome) => {
+                    const prob = probabilities[outcome];
+                    return (
+                      <button
+                        key={outcome}
+                        onClick={() => navigate(`/create-contract?event_id=${event.event_id}&outcome=${encodeURIComponent(outcome)}`)}
+                        className="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 transition-colors flex justify-between items-center px-4"
+                      >
+                        <span>{outcome}</span>
+                        <span className="text-sm bg-blue-800 px-2 py-1 rounded-full">
+                          {prob || "—"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 italic mb-4">No outcomes defined</p>
+            )}
+
+            <p className="text-xs text-gray-500 mt-2">
+              ID: {event.event_id}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}, [navigate, parseOutcomes, contracts, contractsLoading]);
+
 
   if (constantsLoading || eventsLoading || contractsLoading) {
     return (
