@@ -160,23 +160,7 @@ const verifySignature = useCallback(
     return map[status] || status;
   }, []);
 
-  const formatDate = useCallback((dateString) => {
-    if (!dateString) return "Not set";
-    const date = new Date(dateString);
-    if (isNaN(date)) return "Invalid date";
-    return date
-      .toLocaleString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-        timeZone: "Europe/Paris",
-      })
-      .replace(/(\d+)\/(\d+)\/(\d+)/, "$2/$1/$3");
-  }, []);
+
 
   const accepterStake = useCallback((contract) => {
     if (!contract?.stake || !contract?.odds) return "0.00";
@@ -219,7 +203,6 @@ const verifySignature = useCallback(
 
       // Helpers
       formatStatus,
-      formatDate,
       accepterStake,
       toWin,
       refundDetails,
@@ -236,7 +219,6 @@ const verifySignature = useCallback(
       loading,
       error,
       formatStatus,
-      formatDate,
       accepterStake,
       toWin,
       refundDetails,

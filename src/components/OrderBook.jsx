@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useContracts } from "../hooks/useContracts";
 import { useEvents } from "../hooks/useEvents";
+import { formatCustomDate } from "../utils/validation";
 import FilterContracts from "../components/FilterContracts";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 
@@ -118,14 +119,10 @@ const OrderBook = () => {
                     
             <p className="text-sm">
               <strong>Date:</strong>{" "}
-              {eventDate ? new Date(eventDate).toLocaleString(undefined, {
-                    dateStyle: "full",
-                    timeStyle: "short",
-                  })
-                : "N/A"}
+              {formatCustomDate(eventDate)}
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              Shown in your local time zone (stored in UTC)
+              Shown in your local time zone (stored in UTC) ({Intl.DateTimeFormat().resolvedOptions().timeZone})
             </p>
           </div>
         </div>

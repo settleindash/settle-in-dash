@@ -4,6 +4,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useEvents } from "../hooks/useEvents";
 import { useContracts } from "../hooks/useContracts"; // ← NEW: import this
 import { useConstants } from "../hooks/useConstants";
+import { formatCustomDate } from "../utils/validation";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 import FilterEvents from "../components/FilterEvents.jsx";
 
@@ -13,6 +14,8 @@ const Marketplace = () => {
   const { constants, loading: constantsLoading, error: constantsError } = useConstants();
   const navigate = useNavigate();
   const [hasFetched, setHasFetched] = useState(false);
+
+console.log(Intl.DateTimeFormat().resolvedOptions().timeZone);  // What timezone is your browser using?
 
   const parseOutcomes = useCallback((outcomes) => {
     if (!outcomes) return [];
@@ -110,12 +113,7 @@ const renderContent = useCallback((filteredEvents, constants) => {
             <p className="text-sm text-gray-600 mb-1">
               <strong>Date:</strong>{" "}
               <span className="text-gray-800">
-                {event.event_date
-                  ? new Date(event.event_date).toLocaleString(undefined, {
-                      dateStyle: "full",
-                      timeStyle: "short",
-                    })
-                  : "N/A"}
+                {formatCustomDate(event.event_date)}
               </span>
             </p>
             <p className="text-xs text-gray-500 -mt-1 mb-3">(your local time)</p>

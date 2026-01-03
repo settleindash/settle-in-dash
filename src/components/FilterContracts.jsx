@@ -85,27 +85,40 @@ const FilterContracts = ({
   const showingTo = Math.min(page * contractsPerPage, filteredContracts.length);
 
   // Orderbook-specific grouping & stats
-  const orderbookData = useMemo(() => {
-    if (viewMode !== "orderbook") return null;
+const orderbookData = useMemo(() => {
+  if (viewMode !== "orderbook") return null;
 
-    const outcomes = [...new Set(filteredContracts.map(c => c.outcome))];
-    const groups = outcomes.map(outcome => {
-      const outcomeContracts = filteredContracts
-        .filter(c => c.outcome === outcome && c.position_type === "sell")
-        .sort((a, b) => Number(b.odds || 0) - Number(a.odds || 0));
+  const outcomes = [...new Set(filteredContracts.map(c => c.outcome))];
+  const groups = outcomes.map(outcome => {
+    const outcomeContracts = filteredContracts
+      .filter(c => c.outcome === outcome && c.position_type === "sell")
+      .sort((a, b) => Number(b.odds || 0) - Number(a.odds || 0)); // highest odds first!
 
-      const totalLiquidity = outcomeContracts.reduce((sum, c) => sum + Number(c.stake || 0), 0);
-      const avgOdds = outcomeContracts.length
-        ? (outcomeContracts.reduce((sum, c) => sum + Number(c.odds || 0), 0) / outcomeContracts.length).toFixed(2)
-        : "-";
+    const totalLiquidity = outcomeContracts.reduce((sum, c) => sum + Number(c.stake || 0), 0);
 
-      return { outcome, contracts: outcomeContracts, totalLiquidity, avgOdds };
-    });
+    return { outcome, contracts: outcomeContracts, totalLiquidity };
+  });
 
-    const totalLiquidityAll = groups.reduce((sum, g) => sum + g.totalLiquidity, 0);
+  const totalLiquidityAll = groups.reduce((sum, g) => sum + g.totalLiquidity, 0);
 
-    return { groups, totalLiquidityAll };
-  }, [filteredContracts, viewMode]);
+  const maxRows = Math.max(...groups.map(g => g.contracts.length), 1);
+
+  // Pre-calculate Avg Odds per row
+  const rowAverages = Array(maxRows).fill(null).map((_, rowIndex) => {
+    const rowOdds = groups
+      .map(g => g.contracts[rowIndex])
+      .filter(c => !!c)
+      .map(c => Number(c.odds) || 0);
+
+    return rowOdds.length > 0
+      ? (rowOdds.reduce((sum, v) => sum + v, 0) / rowOdds.length)
+      : null;
+  });
+
+  return { groups, totalLiquidityAll, rowAverages, maxRows };
+}, [filteredContracts, viewMode]);
+
+
 
   const clearFilters = () => {
     setSearch("");
@@ -220,61 +233,60 @@ const FilterContracts = ({
         </div>
       )}
 
-      {renderContent ? (
-        renderContent(paginated)
-      ) : viewMode === "orderbook" && orderbookData?.groups?.length > 0 ? (
-        <div className="overflow-x-auto mt-6">
-          <table className="w-full border-collapse bg-white shadow rounded">
-            <thead className="sticky top-0 bg-gray-100 z-10">
-              <tr>
-                {orderbookData.groups.map(g => (
-                  <th key={g.outcome} className="border p-3 text-left font-bold">
-                    {g.outcome}
-                  </th>
-                ))}
-                <th className="border p-3 text-left font-bold">Avg Odds</th>
-                <th className="border p-3 text-left font-bold">Liquidity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...Array(Math.max(...orderbookData.groups.map(g => g.contracts.length), 1))].map((_, row) => (
-                <tr key={row} className="hover:bg-gray-50">
-                  {orderbookData.groups.map(g => {
-                    const c = g.contracts[row];
-                    return (
-                      <td key={g.outcome} className="border p-3">
-                        {c ? (
-                          <Link to={`/contract/${c.contract_id}`} className="text-blue-600 hover:underline font-medium">
-                            {Number(c.odds).toFixed(2)} ({Number(c.stake).toFixed(2)} DASH)
-                          </Link>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                  <td className="border p-3 font-medium">
-                    {row === 0 ? orderbookData.groups[0]?.avgOdds : "-"}
-                  </td>
-                  <td className="border p-3 font-medium">
-                    {row === 0 ? `${orderbookData.groups[0]?.totalLiquidity.toFixed(2)} DASH` : "-"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : paginated.length === 0 ? (
-        <div className="text-center py-12 text-gray-500 bg-white rounded-lg shadow mt-6">
-          No contracts match your filters.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-          {paginated.map(c => (
-            <ContractCard key={c.contract_id} contract={c} eventTitle={c.eventTitle} />
+{renderContent ? (
+  renderContent(paginated)
+) : viewMode === "orderbook" && orderbookData?.groups?.length > 0 ? (
+  <div className="overflow-x-auto mt-6">
+    <table className="w-full border-collapse bg-white shadow rounded">
+      <thead className="sticky top-0 bg-gray-100 z-10">
+        <tr>
+          {orderbookData.groups.map(g => (
+            <th key={g.outcome} className="border p-3 text-left font-bold">
+              {g.outcome}
+            </th>
           ))}
-        </div>
-      )}
+          <th className="border p-3 text-left font-bold">Avg Odds</th>
+        </tr>
+      </thead>
+      <tbody>
+        {[...Array(orderbookData.maxRows)].map((_, row) => (
+          <tr key={row} className="hover:bg-gray-50">
+            {orderbookData.groups.map(g => {
+              const c = g.contracts[row];
+              return (
+                <td key={g.outcome} className="border p-3">
+                  {c ? (
+                    <Link to={`/contract/${c.contract_id}`} className="text-blue-600 hover:underline font-medium">
+                      {Number(c.odds).toFixed(2)} ({Number(c.stake).toFixed(2)} DASH)
+                    </Link>
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
+                </td>
+              );
+            })}
+            {/* Avg Odds column – now correct per row */}
+            <td className="border p-3 font-medium">
+              {orderbookData.rowAverages[row] !== null
+                ? orderbookData.rowAverages[row].toFixed(2)
+                : "-"}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+) : paginated.length === 0 ? (
+  <div className="text-center py-12 text-gray-500 bg-white rounded-lg shadow mt-6">
+    No contracts match your filters.
+  </div>
+) : (
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+    {paginated.map(c => (
+      <ContractCard key={c.contract_id} contract={c} eventTitle={c.eventTitle} />
+    ))}
+  </div>
+)}
 
       {/* Pagination */}
       {filteredContracts.length > contractsPerPage && (

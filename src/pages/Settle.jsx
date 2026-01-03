@@ -1,5 +1,5 @@
 // src/pages/Settle.jsx
-// Component for settling contracts or resolving twists, filtering by user wallet address.
+// Improved: Search by wallet OR multisig (old/new), better UX, aligned with backend
 
 import { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -13,57 +13,44 @@ import ResolveTwistForm from "../components/ResolveTwistForm.jsx";
 const Settle = () => {
   const { contracts, fetchContracts, settleContract, triggerTwist, loading, error: apiError } = useContracts();
   const { events, getEvents } = useEvents();
-  const [userWalletAddress, setUserWalletAddress] = useState("");
-  const [submitterWalletAddress, setSubmitterWalletAddress] = useState("");
-  const [winnerWalletAddress, setWinnerWalletAddress] = useState("");
-  const [reasoning, setReasoning] = useState("");
+  const navigate = useNavigate();
+
+  const [searchValue, setSearchValue] = useState("");
+  const [searchMode, setSearchMode] = useState("wallet"); // "wallet" or "multisig"
   const [selectedContractId, setSelectedContractId] = useState(null);
   const [error, setError] = useState("");
   const [filteredContracts, setFilteredContracts] = useState([]);
-  const navigate = useNavigate();
 
-  const validBase58Chars = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/;
+  const validDashAddress = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{25,35}$/;
 
-  const validateWalletAddress = (address) => {
-    if (!address) {
-      console.log("Settle: validateWalletAddress - Address is empty");
-      return false;
-    }
-    if (address.length !== 34) {
-      console.log(`Settle: validateWalletAddress - Invalid length: ${address.length}`);
-      return false;
-    }
-    if (!address.startsWith("X")) {
-      console.log("Settle: validateWalletAddress - Does not start with 'X'");
-      return false;
-    }
-    if (!validBase58Chars.test(address)) {
-      console.log(`Settle: validateWalletAddress - Invalid characters in: ${address}`);
-      return false;
-    }
-    console.log(`Settle: validateWalletAddress - Valid address: ${address}`);
-    return true;
+  const validateSearchInput = (value) => {
+    if (!value) return false;
+    // Basic Base58 check for Dash addresses/multisigs
+    return validDashAddress.test(value);
   };
 
-  // Fetch all contracts and events on mount
+  // Fetch data on mount
   useEffect(() => {
-    console.log("Settle: Fetching all contracts and events");
     fetchContracts({});
     getEvents({ status: "open" });
   }, [fetchContracts, getEvents]);
 
-  // Map contracts to include eventTitle
+  // Filter contracts based on search mode
   const contractsWithEventTitles = useMemo(() => {
-    console.log("Settle: Mapping contracts with event titles, userWalletAddress:", userWalletAddress);
-    if (!userWalletAddress || !validateWalletAddress(userWalletAddress)) {
-      console.log("Settle: No valid wallet address provided, returning empty array");
-      return [];
-    }
-    const filtered = contracts
-      .filter(
-        (c) =>
-          c.WalletAddress === userWalletAddress || c.accepterWalletAddress === userWalletAddress
-      )
+    if (!searchValue || !validateSearchInput(searchValue)) return [];
+
+    return contracts
+      .filter((c) => {
+        if (searchMode === "wallet") {
+          return c.WalletAddress === searchValue || c.accepterWalletAddress === searchValue;
+        } else {
+          // Multisig mode: match old OR new
+          return (
+            c.multisig_address === searchValue ||
+            c.new_multisig_address === searchValue
+          );
+        }
+      })
       .map((contract) => {
         const event = events.find((e) => e.event_id === contract.event_id);
         return {
@@ -71,27 +58,21 @@ const Settle = () => {
           eventTitle: event ? event.title : "Not set",
         };
       });
-    console.log("Settle: Contracts with event titles:", filtered);
-    return filtered;
-  }, [contracts, events, userWalletAddress]);
+  }, [contracts, events, searchValue, searchMode]);
 
-  // Debug contracts data
-  useEffect(() => {
-    console.log("Settle: Raw contracts from useContracts:", contracts);
-    console.log("Settle: Filtered contracts with event titles:", contractsWithEventTitles);
-    console.log("Settle: Filtered contracts from FilterContracts:", filteredContracts);
-  }, [contracts, contractsWithEventTitles, filteredContracts]);
-
-  // Format winner for display
   const formatWinner = (contract) => {
-    console.log("Settle: formatWinner, contract_id:", contract.contract_id, "winner:", contract.winner, "accepterWalletAddress:", contract.accepterWalletAddress);
     if (contract.winner === "tie") return "Tie";
-    if (contract.winner && contract.winner === contract.WalletAddress) return "Creator";
-    if (contract.winner && contract.accepterWalletAddress && contract.winner === contract.accepterWalletAddress) return "Accepter";
+    if (contract.winner === contract.WalletAddress) return "Creator";
+    if (contract.winner === contract.accepterWalletAddress) return "Accepter";
     return "Not set";
   };
 
-  // Render table for contracts via FilterContracts
+  const handleSearchChange = (e) => {
+    const val = e.target.value.trim();
+    setSearchValue(val);
+    setError("");
+  };
+
   const renderTable = (contractsToRender) => (
     <FilterContracts
       contracts={contractsToRender}
@@ -99,71 +80,45 @@ const Settle = () => {
       contractsPerPage={20}
       renderContent={(paginatedContracts) => (
         <div className="mt-6">
-          <h2 className="text-base sm:text-xl font-semibold mb-4">All Contracts</h2>
+          <h2 className="text-xl font-semibold mb-4">Contracts</h2>
           {paginatedContracts.length === 0 ? (
-            <p className="text-gray-600 text-xs sm:text-base">No contracts available.</p>
+            <p className="text-gray-600">No matching contracts found.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full bg-white border rounded-lg shadow">
                 <thead>
                   <tr className="bg-gray-100 border-b">
-                    <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
-                      Winner
-                    </th>
-                    <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
-                      Creator Choice
-                    </th>
-                    <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
-                      Accepter Choice
-                    </th>
-                    <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
-                      Created At
-                    </th>
-                    <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
-                      Event
-                    </th>
-                    <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
-                      Outcome
-                    </th>
+                    <th className="p-4 text-left text-gray-700">Winner</th>
+                    <th className="p-4 text-left text-gray-700">Creator Choice</th>
+                    <th className="p-4 text-left text-gray-700">Accepter Choice</th>
+                    <th className="p-4 text-left text-gray-700">Created</th>
+                    <th className="p-4 text-left text-gray-700">Event</th>
+                    <th className="p-4 text-left text-gray-700">Outcome</th>
+                    <th className="p-4 text-left text-gray-700">Escrow (New)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedContracts.map((contract) => (
-                    <tr key={contract.contract_id} className="border-b hover:bg-gray-50">
-                      <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
-                        {formatWinner(contract) === "Not set" ? (
+                  {paginatedContracts.map((c) => (
+                    <tr key={c.contract_id} className="border-b hover:bg-gray-50">
+                      <td className="p-4">
+                        {formatWinner(c) === "Not set" ? (
                           <button
-                            className="text-blue-500 hover:underline min-h-[44px]"
-                            onClick={() => {
-                              console.log("Settle: Selected contract_id for settlement:", contract.contract_id);
-                              setSelectedContractId(contract.contract_id);
-                            }}
-                            aria-label={`Select contract ${contract.contract_id} for settlement or twist resolution`}
+                            className="text-blue-500 hover:underline"
+                            onClick={() => setSelectedContractId(c.contract_id)}
                           >
                             Not set
                           </button>
                         ) : (
-                          formatWinner(contract)
+                          formatWinner(c)
                         )}
                       </td>
-                      <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
-                        {contract.creator_winner_choice || "Not submitted"}
-                      </td>
-                      <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
-                        {contract.accepter_winner_choice || "Not submitted"}
-                      </td>
-                      <td className="p-1 sm:p-4 max-w-[50px] truncate break-words text-[10px] sm:text-xs">
-                        {new Date(contract.created_at).toLocaleString("en-GB", {
-                          timeZone: "Europe/Paris",
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
-                      </td>
-                      <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
-                        {contract.eventTitle || "Not set"}
-                      </td>
-                      <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
-                        {contract.outcome || "Not set"}
+                      <td className="p-4">{c.creator_winner_choice || "—"}</td>
+                      <td className="p-4">{c.accepter_winner_choice || "—"}</td>
+                      <td className="p-4">{new Date(c.created_at).toLocaleDateString()}</td>
+                      <td className="p-4">{c.eventTitle || "—"}</td>
+                      <td className="p-4">{c.outcome || "—"}</td>
+                      <td className="p-4 font-mono text-xs break-all">
+                        {c.new_multisig_address ? c.new_multisig_address.slice(0, 12) + "..." : "—"}
                       </td>
                     </tr>
                   ))}
@@ -173,56 +128,69 @@ const Settle = () => {
           )}
         </div>
       )}
-      showFilters={validateWalletAddress(userWalletAddress)}
+      showFilters={validateSearchInput(searchValue)}
     />
   );
 
   return (
     <div className="min-h-screen bg-background p-4">
       <PageHeader title="Settle Contracts" />
-      <main className="max-w-7xl mx-auto p-1 sm:p-6 mt-6">
-        <div className="mb-6">
-          <label htmlFor="userWalletAddress" className="block text-base sm:text-lg font-bold text-primary mb-2">
-            Your Wallet Address (Required)
-          </label>
-          <input
-            id="userWalletAddress"
-            type="text"
-            placeholder="Enter your DASH wallet address to view your contracts"
-            className="border p-2 rounded w-full sm:w-1/2 min-h-[44px] text-[10px] sm:text-base"
-            value={userWalletAddress}
-            onChange={(e) => {
-              console.log("Settle: Wallet Address changed:", e.target.value);
-              setUserWalletAddress(e.target.value);
-              setError("");
-            }}
-            aria-label="Enter your DASH wallet address to view your contracts"
-          />
+      <main className="max-w-7xl mx-auto p-6 mt-6">
+        <div className="mb-8 bg-white p-6 rounded-lg shadow">
+          <label className="block text-lg font-bold mb-2">Search Contracts</label>
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
+            <select
+              value={searchMode}
+              onChange={(e) => {
+                setSearchMode(e.target.value);
+                setSearchValue("");
+              }}
+              className="border p-2 rounded min-w-[200px]"
+            >
+              <option value="wallet">My Wallet Address</option>
+              <option value="multisig">Escrow/Multisig Address</option>
+            </select>
+
+            <input
+              type="text"
+              placeholder={
+                searchMode === "wallet"
+                  ? "Enter your DASH wallet address..."
+                  : "Enter old or new multisig address..."
+              }
+              className="border p-2 rounded flex-1"
+              value={searchValue}
+              onChange={handleSearchChange}
+            />
+          </div>
+
+          <p className="text-sm text-gray-600">
+            {searchMode === "wallet"
+              ? "Enter your personal DASH wallet address to see your created or accepted contracts."
+              : "Enter the **initial escrow** (old 2-of-3) or **final escrow** (new 3-of-3) address where funds are locked. This is the best way to track any contract by its funds."}
+          </p>
+
+          {searchValue && !validateSearchInput(searchValue) && (
+            <p className="text-red-500 mt-2 text-sm">
+              Please enter a valid DASH address (Base58, 25–35 characters).
+            </p>
+          )}
         </div>
-        {!userWalletAddress && (
-          <p className="text-gray-600 text-xs sm:text-base mb-6">
-            Please enter your wallet address to view your contracts.
-          </p>
-        )}
-        {userWalletAddress && !validateWalletAddress(userWalletAddress) && (
-          <p className="text-red-500 text-xs sm:text-base mb-6">
-            Please enter a valid DASH wallet address (34 characters, starts with 'X').
-          </p>
-        )}
-        {validateWalletAddress(userWalletAddress) && selectedContractId && filteredContracts.find((c) => c.contract_id === selectedContractId) && (
+
+        {searchValue && validateSearchInput(searchValue) && renderTable(contractsWithEventTitles)}
+
+        {selectedContractId && filteredContracts.find(c => c.contract_id === selectedContractId) && (
           <SettleContractForm
             selectedContractId={selectedContractId}
             filteredContracts={filteredContracts}
             settleContract={settleContract}
-            setSubmitterWalletAddress={setSubmitterWalletAddress}
-            setWinnerWalletAddress={setWinnerWalletAddress}
-            setReasoning={setReasoning}
             setSelectedContractId={setSelectedContractId}
             setError={setError}
             error={error}
           />
         )}
-        {validateWalletAddress(userWalletAddress) && selectedContractId && filteredContracts.find((c) => c.contract_id === selectedContractId)?.status === "twist" && (
+
+        {selectedContractId && filteredContracts.find(c => c.contract_id === selectedContractId)?.status === "twist" && (
           <ResolveTwistForm
             selectedContractId={selectedContractId}
             filteredContracts={filteredContracts}
@@ -232,12 +200,11 @@ const Settle = () => {
             error={error}
           />
         )}
-        {validateWalletAddress(userWalletAddress) && renderTable(contractsWithEventTitles)}
-        <div className="mt-6">
+
+        <div className="mt-8">
           <Link
             to="/marketplace"
-            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 min-h-[44px] text-[10px] sm:text-base"
-            aria-label="Back to Marketplace"
+            className="bg-gray-500 text-white px-6 py-3 rounded hover:bg-gray-600"
           >
             Back to Marketplace
           </Link>

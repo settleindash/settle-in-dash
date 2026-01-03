@@ -426,31 +426,35 @@ const utcToLocalInput = (utcString) => {
               </h3>
               <p className="text-sm whitespace-pre-wrap mb-2"><strong>Reasoning:</strong> {grokResponse.reasoning}</p>
 
-              {grokResponse.suggested_start_time && (
-                <p className="text-sm italic text-gray-700">
-                  <strong>Suggested Start Time (local):</strong>{" "}
-                  {new Date(grokResponse.suggested_start_time).toLocaleString(undefined, {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                  <span className="text-xs text-gray-500 ml-2">
-                    (UTC: {grokResponse.suggested_start_time})
-                  </span>
-                </p>
-              )}
+{grokResponse.suggested_start_time && (
+  <p className="text-sm italic text-gray-700">
+    <strong>Suggested Start Time (local):</strong>{" "}
+    {new Date(grokResponse.suggested_start_time).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    })} {" "} (in {grokResponse.suggested_start_timezone || userTimeZone})
+    <span className="text-xs text-gray-500 ml-2">
+      (UTC: {new Date(grokResponse.suggested_start_time + ':00')  // Add seconds to make valid ISO
+        .toLocaleString("en-US", {timeZone: grokResponse.suggested_start_timezone || userTimeZone})
+        .replace(/.*(\d{4}).*/, (m, y) => new Date(m).toISOString())})  // Compute UTC from local + tz
+    </span>
+  </p>
+)}
 
-              {grokResponse.suggested_finish_time && (
-                <p className="text-sm italic text-gray-700">
-                  <strong>Suggested Finish Time (local):</strong>{" "}
-                  {new Date(grokResponse.suggested_finish_time).toLocaleString(undefined, {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                  <span className="text-xs text-gray-500 ml-2">
-                    (UTC: {grokResponse.suggested_finish_time})
-                  </span>
-                </p>
-              )}
+{grokResponse.suggested_finish_time && (
+  <p className="text-sm italic text-gray-700">
+    <strong>Suggested Finish Time (local):</strong>{" "}
+    {new Date(grokResponse.suggested_finish_time).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    })} {" "} (in {grokResponse.suggested_finish_timezone || userTimeZone})
+    <span className="text-xs text-gray-500 ml-2">
+      (UTC: {new Date(grokResponse.suggested_finish_time + ':00')
+        .toLocaleString("en-US", {timeZone: grokResponse.suggested_finish_timezone || userTimeZone})
+        .replace(/.*(\d{4}).*/, (m, y) => new Date(m).toISOString())})
+    </span>
+  </p>
+)}
 
               {grokResponse.timezone_note && (
                 <p className="text-sm italic text-gray-700 mt-2">

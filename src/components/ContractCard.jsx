@@ -7,6 +7,7 @@ import { useEvents } from "../hooks/useEvents.js";
 import { useContracts } from "../hooks/useContracts.js";
 import { useConstants } from "../hooks/useConstants.js";
 import { validateDashPublicKey } from "../utils/validation.js";
+import { formatCustomDate } from "../utils/validation";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 import QRCode from "qrcode";
 
@@ -28,7 +29,6 @@ const ContractCard = ({
     listUnspent,
     accepterStake,
     formatStatus,
-    formatDate: formatCustomDate,
     getTransactionInfo,
     verifySignature
   } = useContracts();

@@ -4,8 +4,9 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useConstants } from "../hooks/useConstants.js";
 import { useContracts } from "../hooks/useContracts.js";
 import { useEvents } from "../hooks/useEvents.js";
-import TermsSummary from "./TermsSummary";
 import { validateContractCreation, parseOutcomes } from "../utils/validation";
+import { formatCustomDate } from "../utils/validation";
+import TermsSummary from "./TermsSummary";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 import QRCode from "qrcode";
 
@@ -42,6 +43,11 @@ const CreateContract = () => {
   const [stakeQrCodeUrl, setStakeQrCodeUrl] = useState(null);
   const [stakeTxValidated, setStakeTxValidated] = useState(false);
   const [loading, setLoading] = useState(false);
+
+
+console.log(Intl.DateTimeFormat().resolvedOptions().timeZone);  // What timezone is your browser using?
+console.log(new Date("2026-01-20T20:00:00Z").toLocaleString());  // Should show 21:00 in CET
+
 
   // 1. FETCH CONSTANTS — INDEPENDENT
   // (already handled inside useConstants.js)
@@ -227,66 +233,104 @@ const CreateContract = () => {
   // -----------------------------------------------------------------
   // Transaction validation
   // -----------------------------------------------------------------
-  const validateTransaction = async (txid, expectedDestination, expectedAmount, type, retries = 3) => {
-    if (!/^[0-9a-fA-F]{64}$/.test(txid)) {
-      setError("Invalid transaction ID format.");
-      return false;
-    }
 
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        setLoading(true);
-        const response = await fetch("https://settleindash.com/api/contracts.php", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "validate_transaction",
-            data: {
-              txid,
-              expected_destination: expectedDestination,
-              expected_amount: Number(expectedAmount),
-              min_confirmations: 0,
-            },
-          }),
-        });
-        const result = await response.json();
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        if (!result.success) {
-          if (result.message === "Insufficient confirmations" && attempt < retries) {
-            setError(`Waiting for confirmations (attempt ${attempt}/${retries})…`);
-            await new Promise((r) => setTimeout(r, 30000));
-            continue;
-          }
-          throw new Error(result.message || `Failed to validate ${type} transaction`);
-        }
-
-        console.log(`CreateContract: ${type} transaction validated:`, txid);
-        return true;
-      } catch (err) {
-        setError(`Failed to validate ${type} transaction: ${err.message}`);
-        console.error(`CreateContract: ${type} validation error (attempt ${attempt}):`, err);
-        return false;
-      } finally {
-        setLoading(false);
-      }
-    }
+const validateTransaction = async (txid, expectedDestination, expectedAmount, type) => {
+  if (!/^[0-9a-fA-F]{64}$/.test(txid)) {
+    setError("Invalid transaction ID format (64 hex characters required).");
     return false;
-  };
+  }
 
-  const handleValidateTransactions = async () => {
-    if (!transactionId) return setError("Please enter the stake transaction ID");
-    const amount = Number(stake).toFixed(8);
-    if (Number(stake) <= 0) return setError("Stake amount must be greater than 0");
+  const maxAttempts = 12;          // ~2 minutes total – good for testnet delays
+  const delayMs = 10000;           // 10 seconds – gives InstantSend time to lock
 
-    const ok = await validateTransaction(transactionId, multisigAddress, Number(amount), "stake");
-    if (ok) {
-      setStakeTxValidated(true);
-      setMessage("Stake transaction validated successfully! You can now create the contract.");
-    } else {
-      setStakeTxValidated(false);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      setLoading(true);
+      setMessage(`Validating stake transaction${attempt > 1 ? ` (attempt ${attempt}/${maxAttempts})` : ''}...`);
+
+      const response = await fetch("https://settleindash.com/api/contracts.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "validate_transaction",
+          data: {
+            txid,
+            expected_destination: expectedDestination,
+            expected_amount: Number(expectedAmount),
+            min_confirmations: 0,  // Let backend decide based on InstantSend
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status} - ${result.message || 'Unknown error'}`);
+      }
+
+      if (result.success) {
+        console.log(`${type} transaction validated:`, txid);
+        setMessage("Stake transaction successfully validated!");
+        return true;
+      }
+
+      // Smart retry logic based on backend message
+      const msg = result.message?.toLowerCase() || "";
+      if (msg.includes("instant") || msg.includes("confirm") || msg.includes("waiting") || msg.includes("lock")) {
+        setError(result.message || "Transaction not yet confirmed or InstantSend-locked. Retrying...");
+      } else {
+        // Fatal error (amount mismatch, wrong address, etc.)
+        setError(result.message || "Transaction validation failed. Please check details.");
+        return false; // stop retrying
+      }
+
+      // Continue retry
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+
+      // Max attempts reached
+      setError("Validation timeout after 2 minutes. The transaction may still be processing – please try again later or check on a Dash explorer.");
+      return false;
+
+    } catch (err) {
+      console.error("Validation error:", err);
+      setError(`Failed to contact validation server: ${err.message}`);
+      return false;
+    } finally {
+      setLoading(false);
     }
-  };
+  }
+
+  return false;
+};
+
+const handleValidateTransactions = async () => {
+  if (!transactionId) {
+    setError("Please enter the stake transaction ID");
+    return;
+  }
+
+  const amount = Number(stake);
+  if (isNaN(amount) || amount <= 0) {
+    setError("Stake amount must be greater than 0");
+    return;
+  }
+
+  setError(""); // Clear old errors
+  setMessage("Starting validation...");
+
+  const ok = await validateTransaction(transactionId, multisigAddress, amount, "stake");
+
+  if (ok) {
+    setStakeTxValidated(true);
+    setMessage("Stake transaction validated successfully! You can now create the contract.");
+  } else {
+    setStakeTxValidated(false);
+    // Error already set inside validateTransaction
+  }
+};
 
   // -----------------------------------------------------------------
   // Form submission
@@ -343,7 +387,7 @@ const CreateContract = () => {
         position_type: positionType,
         stake: Number(stake),
         odds: Number(odds),
-        cceptance_deadline: new Date(acceptanceDeadline).toISOString(),
+        acceptance_deadline: new Date(acceptanceDeadline).toISOString(),
         multisig_address: multisigAddress,
         refund_transaction_id: "",
         creator_public_key: creatorPublicKey,
@@ -397,13 +441,7 @@ const CreateContract = () => {
 
                   <div>
                     <span className="font-medium text-gray-700">Event Date & Time:</span>
-                    <p className="text-gray-800">
-                      {selectedEvent.event_date
-                        ? new Date(selectedEvent.event_date).toLocaleString(undefined, {
-                            dateStyle: "full",
-                            timeStyle: "short",
-                          })
-                        : "N/A"}
+                    <p className="text-gray-800"> {formatCustomDate(selectedEvent.event_date)}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
                       Shown in your local time zone (stored in UTC)
@@ -527,7 +565,7 @@ const CreateContract = () => {
                 aria-label="Stake amount"
               />
               <p className="text-gray-600 text-xs mt-1">
-                Note: A small network fee (0.001 DASH) will be deducted from your stake if the contract is refunded or settled.
+                Note: A small network fee (0.0001 DASH) will be deducted from your stake if the contract is refunded or settled.
               </p>
             </div>
 

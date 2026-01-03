@@ -1,3 +1,7 @@
+
+// src/utils/validation.js
+
+
 export const SIGNATURE_MESSAGE_PREFIX = "SettleInDash:";
 
 export const parseOutcomes = (outcomes) => {
@@ -83,10 +87,34 @@ export const validateEventCreation = async (data) => {
   };
 };
 
+
+// Add this new function
+export const validateWalletAddress = (address) => {
+  if (!address || typeof address !== 'string') {
+    return {
+      isValid: false,
+      message: "Wallet address is required and must be a string"
+    };
+  }
+
+  if (!/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(address)) {
+    return {
+      isValid: false,
+      message: "Wallet address format looks invalid (must start with 'y', 26-35 characters)"
+    };
+  }
+
+  return {
+    isValid: true,
+    message: ""
+  };
+};
+
+
 export const validateContractCreation = async (data, selectedEvent) => {
   const errors = [];
 
-  const requiredFields = ['eventId', 'outcome', 'positionType', 'stake', 'odds', 'walletAddress', 'expiration_date', 'signature', 'description'];
+  const requiredFields = ['eventId', 'outcome', 'positionType', 'stake', 'odds', 'walletAddress', 'expiration_date', 'signature'];
   requiredFields.forEach((field) => {
     if (!data[field] || (typeof data[field] === "string" && data[field].trim() === "")) {
       errors.push(`Missing or empty required field: ${field}`);
@@ -129,8 +157,8 @@ export const validateContractCreation = async (data, selectedEvent) => {
     }
   }
 
-  if (data.walletAddress && data.signature) {
-    const walletValidation = await validateWalletAddress(data.walletAddress, "testnet", data.signature);
+  if (data.walletAddress) {
+    const walletValidation = validateWalletAddress(data.walletAddress);
     if (!walletValidation.isValid) {
       errors.push(walletValidation.message);
     }
@@ -155,4 +183,20 @@ export const validateDashPublicKey = (publicKey) => {
     return false;
   }
   return true;
+};
+
+
+export const formatCustomDate = (dateString) => {
+  if (!dateString) return "Not set";
+
+  // Force UTC parsing by adding 'Z' (handles both space and T formats)
+  const utcString = dateString.replace(' ', 'T') + (dateString.includes('Z') ? '' : 'Z');
+  const date = new Date(utcString);
+
+  if (isNaN(date.getTime())) return "Invalid date";
+
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",   // e.g. "Jan 20, 2026"
+    timeStyle: "short",    // e.g. "21:00"
+  });
 };
