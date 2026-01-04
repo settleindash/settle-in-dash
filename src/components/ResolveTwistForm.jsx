@@ -5,7 +5,7 @@ const ResolveTwistForm = ({
   selectedContractId,
   filteredContracts,
   triggerTwist,
-  setSelectedContractId,
+  setSelectedContract,
   setError,
   error, // Added prop
 }) => {
@@ -29,7 +29,7 @@ const ResolveTwistForm = ({
     const result = await triggerTwist(selectedContractId);
     if (result.success) {
       console.log("ResolveTwistForm: Twist resolved successfully:", result.message);
-      setSelectedContractId(null);
+      setSelectedContract(null);
       alert(result.message);
     } else {
       setError(`Error: ${result.error}`);

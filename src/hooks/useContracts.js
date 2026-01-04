@@ -37,7 +37,7 @@ export const useContracts = () => {
 
   // 1. fetchContracts
   const fetchContracts = useCallback(
-    async ({ contract_id, event_id, status = "open" } = {}) => {
+    async ({ contract_id, event_id, status = null } = {}) => {
       const cacheKey = contract_id || event_id || status;
       if (contractCache[cacheKey]) return contractCache[cacheKey];
 
@@ -82,7 +82,29 @@ const acceptContract = useCallback(
   [post]
 );
 
-  // 4. validateTransaction
+// 4. settleContract
+const settleContract = useCallback(
+  async (contractId, resolution, reasoning, signerAddress, signature, message) => {
+    try {
+      const result = await post("settle_contract", {
+        contract_id: contractId,
+        resolution, //caled claimedOutcome in ResolveTwistForm
+        reasoning,
+        signer_address: signerAddress,
+        signature,
+        message, 
+      });
+      return result;
+    } catch (err) {
+      const msg = err.message || "Network error during settlement";
+      setError(msg);
+      throw err;
+    }
+  },
+  [post]
+);
+
+  // 5. validateTransaction
   const validateTransaction = useCallback(
     async ({ txid, expected_destination, expected_amount, min_confirmations = 1 }) => {
       return await post("validate_transaction", {
@@ -95,7 +117,7 @@ const acceptContract = useCallback(
     [post]
   );
 
-    // NEW: getTransactionInfo — reusable across app
+    // 6. getTransactionInfo
   const getTransactionInfo = useCallback(
     async (txid) => {
       if (!txid) return null;
@@ -110,7 +132,7 @@ const acceptContract = useCallback(
     [post]
   );
 
-   // NEW: verifySignature — reusable everywhere
+   // 7.  verifySignature 
 const verifySignature = useCallback(
   async (address, signature) => {
     const message = `SettleInDash:${address}`;
@@ -139,7 +161,7 @@ const verifySignature = useCallback(
   []
 );
 
-  // 5. listUnspent (for double-spend protection)
+  // 8. listUnspent (for double-spend protection)
   const listUnspent = useCallback(
     async (address, minconf = 0) => {
       return await post("listunspent", { address, minconf });
@@ -159,7 +181,6 @@ const verifySignature = useCallback(
     };
     return map[status] || status;
   }, []);
-
 
 
   const accepterStake = useCallback((contract) => {
@@ -190,6 +211,7 @@ const verifySignature = useCallback(
       fetchContracts,
       createContract,
       acceptContract,
+      settleContract,
       validateTransaction,
       listUnspent,
       getTransactionInfo,
@@ -211,6 +233,7 @@ const verifySignature = useCallback(
       fetchContracts,
       createContract,
       acceptContract,
+      settleContract,
       validateTransaction,
       listUnspent,
       getTransactionInfo,

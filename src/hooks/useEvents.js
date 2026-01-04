@@ -73,12 +73,28 @@ export const useEvents = () => {
 }, [fetchEvents]);
 
 
+ const parseOutcomes = (outcomes) => {
+  if (!outcomes) return [];
+  try {
+    if (typeof outcomes === "string") {
+      const parsed = JSON.parse(outcomes);
+      if (Array.isArray(parsed)) return parsed;
+      return outcomes.split(",").map(o => o.trim());
+    }
+    if (Array.isArray(outcomes)) return outcomes;
+    return [];
+  } catch {
+    return typeof outcomes === "string" ? outcomes.split(",").map(o => o.trim()) : [];
+  }
+};
+
   return useMemo(() => ({
     events,
     createEvent,
     getEvents,
     getEvent,
+    parseOutcomes,
     loading,
     error,
-  }), [events, createEvent, getEvents, getEvent, loading, error]);
+  }), [events, createEvent, getEvents, getEvent, parseOutcomes, loading, error]);
 };

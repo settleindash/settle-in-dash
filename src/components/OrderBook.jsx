@@ -23,7 +23,7 @@ const OrderBook = () => {
   // Fetch contracts for this event
   useEffect(() => {
     if (event_id) {
-      fetchContracts({ event_id, status: "open" });
+      fetchContracts({ event_id, status: null });
     }
   }, [event_id, fetchContracts]);
 

@@ -18,7 +18,7 @@ const FilterContracts = ({
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(
-    viewMode === "orderbook" ? ["open", "accepted"] : []
+    viewMode === "orderbook" ? ["open"] : []
   );
   const [sortBy, setSortBy] = useState(
     viewMode === "orderbook" ? { field: "odds", direction: "desc" } : { field: "created_at", direction: "desc" }
@@ -122,7 +122,7 @@ const orderbookData = useMemo(() => {
 
   const clearFilters = () => {
     setSearch("");
-    setStatusFilter(viewMode === "orderbook" ? ["open", "accepted"] : []);
+    setStatusFilter(viewMode === "orderbook" ? ["open"] : []);
     setSortBy(viewMode === "orderbook" ? { field: "odds", direction: "desc" } : { field: "created_at", direction: "desc" });
     setPage(1);
   };

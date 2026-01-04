@@ -1,64 +1,80 @@
 // src/pages/Settle.jsx
-// Improved: Search by wallet OR multisig (old/new), better UX, aligned with backend
+// Multisig-only search, guided UX, direct display, loading/empty states
 
 import { useState, useEffect, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useContracts } from "../hooks/useContracts";
 import { useEvents } from "../hooks/useEvents";
+import { formatCustomDate } from "../utils/validation";
 import PageHeader from "../utils/formats/PageHeader.jsx";
-import FilterContracts from "../components/FilterContracts.jsx";
 import SettleContractForm from "../components/SettleContractForm.jsx";
 import ResolveTwistForm from "../components/ResolveTwistForm.jsx";
+import debounce from "lodash/debounce";
+
+
 
 const Settle = () => {
-  const { contracts, fetchContracts, settleContract, triggerTwist, loading, error: apiError } = useContracts();
-  const { events, getEvents } = useEvents();
-  const navigate = useNavigate();
+  const { contracts, fetchContracts, settleContract, triggerTwist, loading } = useContracts();
+  const { events, getEvents, parseOutcomes  } = useEvents();
 
   const [searchValue, setSearchValue] = useState("");
-  const [searchMode, setSearchMode] = useState("wallet"); // "wallet" or "multisig"
-  const [selectedContractId, setSelectedContractId] = useState(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedContract, setSelectedContract] = useState(null);
   const [error, setError] = useState("");
-  const [filteredContracts, setFilteredContracts] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const validDashAddress = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{25,35}$/;
 
-  const validateSearchInput = (value) => {
-    if (!value) return false;
-    // Basic Base58 check for Dash addresses/multisigs
-    return validDashAddress.test(value);
-  };
+  const debouncedSetSearch = useMemo(() => debounce(setDebouncedSearch, 300), []);
 
-  // Fetch data on mount
   useEffect(() => {
-    fetchContracts({});
-    getEvents({ status: "open" });
+    fetchContracts({ status: null });
+    getEvents({ status: null });
   }, [fetchContracts, getEvents]);
 
-  // Filter contracts based on search mode
-  const contractsWithEventTitles = useMemo(() => {
-    if (!searchValue || !validateSearchInput(searchValue)) return [];
+  useEffect(() => {
+    if (debouncedSearch && validateSearchInput(debouncedSearch)) {
+      setIsSearching(true);
+      searchForContract(debouncedSearch).finally(() => setIsSearching(false));
+    } else {
+      setSelectedContract(null);
+      setError("");
+    }
+  }, [debouncedSearch]);
 
-    return contracts
-      .filter((c) => {
-        if (searchMode === "wallet") {
-          return c.WalletAddress === searchValue || c.accepterWalletAddress === searchValue;
-        } else {
-          // Multisig mode: match old OR new
-          return (
-            c.multisig_address === searchValue ||
-            c.new_multisig_address === searchValue
-          );
-        }
-      })
-      .map((contract) => {
-        const event = events.find((e) => e.event_id === contract.event_id);
-        return {
-          ...contract,
-          eventTitle: event ? event.title : "Not set",
-        };
-      });
-  }, [contracts, events, searchValue, searchMode]);
+  const validateSearchInput = (value) => validDashAddress.test(value);
+
+const searchForContract = async (multisig) => {
+  setError("");
+  const found = contracts.find(
+    (c) => c.multisig_address === multisig || c.new_multisig_address === multisig
+  );
+
+  if (found) {
+    const event = events.find((e) => e.event_id === found.event_id);
+    setSelectedContract({
+      ...found,
+      eventTitle: event ? event.title : "Unknown Event",
+      description: event ? event.description : "",          // ← Add this!
+      event_date: event ? event.event_date : null,          // ← Already used, but ensure
+      possible_outcomes: event ? event.possible_outcomes : null // ← For outcomes list
+    });
+  } else {
+    setError("No contract found for this multisig address.");
+  }
+};
+
+  const handleSearchChange = (e) => {
+    const val = e.target.value.trim();
+    setSearchValue(val);
+    if (val === "") {
+      setDebouncedSearch("");
+      setSelectedContract(null);
+      setError("");
+    } else {
+      debouncedSetSearch(val);
+    }
+  };
 
   const formatWinner = (contract) => {
     if (contract.winner === "tie") return "Tie";
@@ -67,145 +83,141 @@ const Settle = () => {
     return "Not set";
   };
 
-  const handleSearchChange = (e) => {
-    const val = e.target.value.trim();
-    setSearchValue(val);
-    setError("");
-  };
-
-  const renderTable = (contractsToRender) => (
-    <FilterContracts
-      contracts={contractsToRender}
-      onFilterChange={setFilteredContracts}
-      contractsPerPage={20}
-      renderContent={(paginatedContracts) => (
-        <div className="mt-6">
-          <h2 className="text-xl font-semibold mb-4">Contracts</h2>
-          {paginatedContracts.length === 0 ? (
-            <p className="text-gray-600">No matching contracts found.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white border rounded-lg shadow">
-                <thead>
-                  <tr className="bg-gray-100 border-b">
-                    <th className="p-4 text-left text-gray-700">Winner</th>
-                    <th className="p-4 text-left text-gray-700">Creator Choice</th>
-                    <th className="p-4 text-left text-gray-700">Accepter Choice</th>
-                    <th className="p-4 text-left text-gray-700">Created</th>
-                    <th className="p-4 text-left text-gray-700">Event</th>
-                    <th className="p-4 text-left text-gray-700">Outcome</th>
-                    <th className="p-4 text-left text-gray-700">Escrow (New)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedContracts.map((c) => (
-                    <tr key={c.contract_id} className="border-b hover:bg-gray-50">
-                      <td className="p-4">
-                        {formatWinner(c) === "Not set" ? (
-                          <button
-                            className="text-blue-500 hover:underline"
-                            onClick={() => setSelectedContractId(c.contract_id)}
-                          >
-                            Not set
-                          </button>
-                        ) : (
-                          formatWinner(c)
-                        )}
-                      </td>
-                      <td className="p-4">{c.creator_winner_choice || "—"}</td>
-                      <td className="p-4">{c.accepter_winner_choice || "—"}</td>
-                      <td className="p-4">{new Date(c.created_at).toLocaleDateString()}</td>
-                      <td className="p-4">{c.eventTitle || "—"}</td>
-                      <td className="p-4">{c.outcome || "—"}</td>
-                      <td className="p-4 font-mono text-xs break-all">
-                        {c.new_multisig_address ? c.new_multisig_address.slice(0, 12) + "..." : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-      showFilters={validateSearchInput(searchValue)}
-    />
-  );
-
   return (
     <div className="min-h-screen bg-background p-4">
       <PageHeader title="Settle Contracts" />
       <main className="max-w-7xl mx-auto p-6 mt-6">
         <div className="mb-8 bg-white p-6 rounded-lg shadow">
-          <label className="block text-lg font-bold mb-2">Search Contracts</label>
-          <div className="flex flex-col sm:flex-row gap-4 mb-4">
-            <select
-              value={searchMode}
-              onChange={(e) => {
-                setSearchMode(e.target.value);
-                setSearchValue("");
-              }}
-              className="border p-2 rounded min-w-[200px]"
-            >
-              <option value="wallet">My Wallet Address</option>
-              <option value="multisig">Escrow/Multisig Address</option>
-            </select>
-
+          <label className="block text-lg font-bold mb-2">Search by Multisig Address</label>
+          <div className="relative">
             <input
               type="text"
-              placeholder={
-                searchMode === "wallet"
-                  ? "Enter your DASH wallet address..."
-                  : "Enter old or new multisig address..."
-              }
-              className="border p-2 rounded flex-1"
+              placeholder="Enter old or new multisig address (e.g. 8nrUB7LV...)"
+              className="border p-2 rounded w-full"
               value={searchValue}
               onChange={handleSearchChange}
+              autoFocus
             />
+            {searchValue && (
+              <button
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                onClick={() => {
+                  setSearchValue("");
+                  setDebouncedSearch("");
+                  setSelectedContract(null);
+                  setError("");
+                }}
+              >
+                ×
+              </button>
+            )}
           </div>
-
-          <p className="text-sm text-gray-600">
-            {searchMode === "wallet"
-              ? "Enter your personal DASH wallet address to see your created or accepted contracts."
-              : "Enter the **initial escrow** (old 2-of-3) or **final escrow** (new 3-of-3) address where funds are locked. This is the best way to track any contract by its funds."}
+          <p className="text-sm text-gray-600 mt-2">
+            Enter the multisig address where funds are locked. Find it in your wallet's transaction history.
           </p>
 
           {searchValue && !validateSearchInput(searchValue) && (
             <p className="text-red-500 mt-2 text-sm">
-              Please enter a valid DASH address (Base58, 25–35 characters).
+              Invalid address — must be 25–35 Base58 characters.
             </p>
           )}
         </div>
 
-        {searchValue && validateSearchInput(searchValue) && renderTable(contractsWithEventTitles)}
+        {isSearching && <p className="text-center text-blue-600">Searching...</p>}
 
-        {selectedContractId && filteredContracts.find(c => c.contract_id === selectedContractId) && (
-          <SettleContractForm
-            selectedContractId={selectedContractId}
-            filteredContracts={filteredContracts}
-            settleContract={settleContract}
-            setSelectedContractId={setSelectedContractId}
-            setError={setError}
-            error={error}
-          />
+        {error && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-4">
+            <p className="text-yellow-700">{error}</p>
+            <p className="text-sm text-yellow-600 mt-2">
+              • Double-check the address in your wallet tx history.<br />
+              • Try both old (initial 2-of-3) and new (final 3-of-3) multisig.<br />
+              • If this is a new contract, settlement may not be available yet.
+            </p>
+          </div>
         )}
 
-        {selectedContractId && filteredContracts.find(c => c.contract_id === selectedContractId)?.status === "twist" && (
-          <ResolveTwistForm
-            selectedContractId={selectedContractId}
-            filteredContracts={filteredContracts}
-            triggerTwist={triggerTwist}
-            setSelectedContractId={setSelectedContractId}
-            setError={setError}
-            error={error}
-          />
-        )}
+{selectedContract && (
+  <div className="bg-white p-6 rounded-lg shadow mb-8">
 
-        <div className="mt-8">
-          <Link
-            to="/marketplace"
-            className="bg-gray-500 text-white px-6 py-3 rounded hover:bg-gray-600"
-          >
+    {/* Event Title + Description — Prominent grey box at top */}
+    <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <h3 className="text-md font-semibold text-gray-700 mb-2">
+        Event: {selectedContract.eventTitle || "—"}
+      </h3>
+      {selectedContract.description && (
+        <p className="text-sm text-gray-700 whitespace-pre-wrap">
+          {selectedContract.description}
+        </p>
+      )}
+      {!selectedContract.description && (
+        <p className="text-sm text-gray-500 italic">
+          No description provided.
+        </p>
+      )}
+    </div>
+
+
+    {/* Grid: Details + Addresses */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      {/* Left: Contract & Status Details */}
+      <div className="p-4 bg-gray-50 rounded-lg">
+        <h3 className="text-md font-semibold text-gray-700 mb-3">Contract Details</h3>
+        <div className="space-y-2 text-sm">
+          <p><strong>Contract created at:</strong>{" "} {formatCustomDate(selectedContract.created_at)}
+          <p><strong>Event Date & Time:</strong>{" "} {selectedContract.event_date ? formatCustomDate(selectedContract.event_date): "—"}</p>
+          <p><strong>Status:</strong> {selectedContract.status}</p>
+          <p><strong>Outcomes:</strong>{" "}{parseOutcomes(selectedContract.possible_outcomes || []).join(", ") || "—"} </p>
+          <p><strong>Winner:</strong> {formatWinner(selectedContract)}</p>
+          <p><strong>Creator's Choice:</strong> {selectedContract.creator_winner_choice || "—"}</p>
+          <p><strong>Accepter's Choice:</strong> {selectedContract.accepter_winner_choice || "—"}</p>
+          </p>
+        </div>
+      </div>
+      
+
+      {/* Right: Parties & Escrow */}
+      <div className="p-4 bg-gray-50 rounded-lg">
+        <h3 className="text-md font-semibold text-gray-700 mb-3">Parties & Escrow</h3>
+        <div className="space-y-2 text-sm font-mono break-all">
+          <p><strong>Creator Address:</strong> {selectedContract.WalletAddress}</p>
+          <p><strong>Accepter Address:</strong> {selectedContract.accepterWalletAddress || "—"}</p>
+          <p><strong>Old Multisig:</strong> {selectedContract.multisig_address}</p>
+          <p><strong>New Multisig:</strong> {selectedContract.new_multisig_address || "—"}</p>
+        </div>
+      </div>
+    </div>
+
+      {/* Settlement / Twist forms — direct, no extra grey box */}
+    {selectedContract.status === "accepted" && formatWinner(selectedContract) === "Not set" && (
+      <div className="mt-6"> {/* ← Only small margin for breathing room */}
+        <SettleContractForm
+          selectedContractId={selectedContract.contract_id}
+          filteredContracts={[selectedContract]}
+          settleContract={settleContract}
+          setSelectedContract={setSelectedContract}
+          setError={setError}
+          error={error}
+        />
+      </div>
+    )}
+
+    {selectedContract.status === "twist" && (
+      <div className="mt-6">
+        <ResolveTwistForm
+          selectedContractId={selectedContract.contract_id}
+          filteredContracts={[selectedContract]}
+          triggerTwist={triggerTwist}
+          setSelectedContract={setSelectedContract}
+          setError={setError}
+          error={error}
+        />
+      </div>
+    )}
+  </div>
+)}
+
+        <div className="mt-8 text-center">
+          <Link to="/marketplace" className="bg-gray-500 text-white px-6 py-3 rounded hover:bg-gray-600">
             Back to Marketplace
           </Link>
         </div>
