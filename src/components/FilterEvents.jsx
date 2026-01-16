@@ -28,7 +28,9 @@ const FilterEvents = ({
     setPage(1);
   }, [search, debouncedSetSearch]);
 
-  const now = useMemo(() => new Date(), []);
+  //const now = useMemo(() => new Date(), []); old
+
+  const now = new Date();
 
 // 1. Liquidity stats — always on full events list (no filter)
 const liquidityStats = useMemo(() => {
@@ -92,7 +94,6 @@ const filteredEvents = useMemo(() => {
       return 0;
     });
 }, [events, debouncedSearch, categoryFilter, sortBy, includePastEvents, now, liquidityStats]);
-
 
 
 

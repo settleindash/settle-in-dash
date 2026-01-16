@@ -105,9 +105,9 @@ const SettleContractForm = ({
     selectedContractId,
     claimedOutcome,
     reasoning,
-    walletAddress,   // signer_address
-    signature,       // ← Add this!
-    message          // ← Add this!
+    walletAddress,
+    signature,
+    message
   );
 
   if (result.success) {
