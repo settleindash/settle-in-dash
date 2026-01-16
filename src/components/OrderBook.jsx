@@ -153,6 +153,7 @@ const OrderBook = () => {
           eventId={event_id}
           renderContent={null} // Use internal orderbook rendering
           showFilters={true}
+          showPastDeadlineOption={true} 
         />
 
         {/* Liquidity Summary */}

@@ -5,7 +5,7 @@ import { useConstants } from "../hooks/useConstants.js";
 import { useContracts } from "../hooks/useContracts.js";
 import { useEvents } from "../hooks/useEvents.js";
 import { validateContractCreation, parseOutcomes } from "../utils/validation";
-import { formatCustomDate } from "../utils/validation";
+import { formatCustomDate, getLocalDateString } from "../utils/validation";
 import TermsSummary from "./TermsSummary";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 import QRCode from "qrcode";
@@ -600,7 +600,7 @@ const handleValidateTransactions = async () => {
                 className="border p-2 rounded w-full text-sm"
                 value={acceptanceDeadline}
                 min={minDateTime}
-                max={selectedEvent?.event_date?.slice(0, 16)}
+                max={getLocalDateString(selectedEvent?.event_date)}
                 onChange={(e) => setAcceptanceDeadline(e.target.value)}
                 disabled={loading}
                 aria-label="Acceptance deadline"

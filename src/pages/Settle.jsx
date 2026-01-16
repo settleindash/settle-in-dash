@@ -167,9 +167,9 @@ const searchForContract = async (multisig) => {
           <p><strong>Event Date & Time:</strong>{" "} {selectedContract.event_date ? formatCustomDate(selectedContract.event_date): "—"}</p>
           <p><strong>Status:</strong> {selectedContract.status}</p>
           <p><strong>Outcomes:</strong>{" "}{parseOutcomes(selectedContract.possible_outcomes || []).join(", ") || "—"} </p>
-          <p><strong>Winner:</strong> {formatWinner(selectedContract)}</p>
           <p><strong>Creator's Choice:</strong> {selectedContract.creator_winner_choice || "—"}</p>
           <p><strong>Accepter's Choice:</strong> {selectedContract.accepter_winner_choice || "—"}</p>
+          <p><strong>Winner:</strong> {formatWinner(selectedContract)}</p>
           </p>
         </div>
       </div>

@@ -144,18 +144,37 @@ export const validateContractCreation = async (data, selectedEvent) => {
     errors.push("Invalid odds: must be greater than 1");
   }
 
-  if (data.expiration_date && selectedEvent) {
-    try {
-      const expiration = new Date(data.expiration_date);
-      const eventDate = new Date(selectedEvent.event_date);
-      const now = new Date();
-      if (expiration <= now || expiration > eventDate) {
-        errors.push("Expiration date must be after now and before or on event date");
+if (data.expiration_date && selectedEvent) {
+  try {
+    const expiration = new Date(data.expiration_date);
+    const eventDate = new Date(selectedEvent.event_date);
+    const now = new Date();
+
+    if (isNaN(expiration.getTime()) || isNaN(eventDate.getTime())) {
+      errors.push("Invalid date format for expiration or event date");
+    } else {
+      // Must be in the future
+      if (expiration <= now) {
+        errors.push("Expiration date must be in the future");
       }
-    } catch (err) {
-      errors.push("Invalid expiration date format");
+
+      // Allow equality: deadline can be exactly at event time
+      // (most user-friendly for betting contracts)
+      if (expiration > eventDate) {
+        // Show the event time in the user's local timezone for clarity
+        const eventLocal = eventDate.toLocaleString(undefined, {
+          dateStyle: 'medium',
+          timeStyle: 'short'
+        });
+        errors.push(
+          `Expiration date must be before or on the event time (${eventLocal}) in your local timezone`
+        );
+      }
     }
+  } catch (err) {
+    errors.push("Invalid expiration date format");
   }
+}
 
   if (data.walletAddress) {
     const walletValidation = validateWalletAddress(data.walletAddress);
@@ -199,4 +218,16 @@ export const formatCustomDate = (dateString) => {
     dateStyle: "medium",   // e.g. "Jan 20, 2026"
     timeStyle: "short",    // e.g. "21:00"
   });
+};
+
+
+export const getLocalDateString = (isoUtc) => {
+  if (!isoUtc) return undefined;
+  const date = new Date(isoUtc);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };

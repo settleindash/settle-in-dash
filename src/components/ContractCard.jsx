@@ -392,12 +392,11 @@ const handleAcceptSubmission = async () => {
             <p className="text-gray-600">Contract ID: {contract.contract_id ?? "Not set"}</p>
             <p className="text-gray-600">Question: {contract.question ?? "Not set"}</p>
             <p className="text-gray-600">Category: {contract.category ?? "Not set"}</p>
-            <p className="text-gray-600">Created At: {formatCustomDate(contract.created_at)}</p>
+            <p className="text-gray-600">Created At: {formatCustomDate(contract.created_at)} {' '}
+              <span className="text-xs text-gray-500">(your local time)</span> </p>
 
-            <p className="text-gray-600">
-              Event Time: {eventLoading ? "Loading..." : eventError ? "Error" : eventData ? formatCustomDate(eventData.event_date) : "Not set"}{' '}
-              <span className="text-xs text-gray-500">(your local time)</span>
-            </p>
+            <p className="text-gray-600"> Event Time: {eventLoading ? "Loading..." : eventError ? "Error" : eventData ? formatCustomDate(eventData.event_date) : "Not set"}{' '}
+              <span className="text-xs text-gray-500">(your local time)</span> </p>
 
             <p className="text-gray-600">Status: {formatStatus(contract.status)}</p>
           </div>
@@ -459,7 +458,7 @@ const handleAcceptSubmission = async () => {
                           rel="noopener noreferrer"
                           className="underline"
                         >
-                          {contract.pot_creator_txid.slice(0, 12)}...
+                          {contract.pot_creator_txid}
                         </a>
                       </p>
                     )}

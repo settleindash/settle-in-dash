@@ -30,57 +30,11 @@ const FilterEvents = ({
 
   const now = useMemo(() => new Date(), []);
 
-  const filteredEvents = useMemo(() => {
-    return (events || [])
-      .filter((e) => {
-        if (!e.event_id || !e.event_date) return false;
-
-        const matchesSearch = (e.title || "").toLowerCase().includes(debouncedSearch.toLowerCase().trim());
-        const matchesCategory = !categoryFilter || e.category === categoryFilter;
-        
-        const eventDate = new Date(e.event_date);
-        const isUpcoming = includePastEvents || (!isNaN(eventDate.getTime()) && eventDate > now);
-
-        return matchesSearch && matchesCategory && isUpcoming;
-      })
-
-.sort((a, b) => {
-  if (!sortBy.field) return 0;
-
-  if (sortBy.field === "event_date") {
-    const dateA = new Date(a.event_date);
-    const dateB = new Date(b.event_date);
-    return sortBy.direction === "asc" ? dateA - dateB : dateB - dateA;
-  }
-
-  if (sortBy.field === "title") {
-    return sortBy.direction === "asc"
-      ? (a.title || "").localeCompare(b.title || "")
-      : (b.title || "").localeCompare(a.title || "");
-  }
-
-  // NEW: Liquidity sorting
-  if (sortBy.field === "totalOpen" || sortBy.field === "totalAccepted") {
-    const statsA = liquidityStats[a.event_id] || { totalOpen: "0", totalAccepted: "0" };
-    const statsB = liquidityStats[b.event_id] || { totalOpen: "0", totalAccepted: "0" };
-    const valA = parseFloat(sortBy.field === "totalOpen" ? statsA.totalOpen : statsA.totalAccepted) || 0;
-    const valB = parseFloat(sortBy.field === "totalOpen" ? statsB.totalOpen : statsB.totalAccepted) || 0;
-    return sortBy.direction === "asc" ? valA - valB : valB - valA;
-  }
-
-  return 0;
-});
-
-  }, [events, debouncedSearch, categoryFilter, sortBy, includePastEvents, now]);
-
-
-
- // NEW: Liquidity calculations using passed contracts prop
+// 1. Liquidity stats — always on full events list (no filter)
 const liquidityStats = useMemo(() => {
   const stats = {};
 
-  filteredEvents.forEach((e) => {
-    // Filter contracts for this event
+  (events || []).forEach((e) => {
     const eventContracts = contracts.filter(c => c.event_id === e.event_id);
 
     const openContracts = eventContracts.filter(c => c.status === "open");
@@ -95,8 +49,49 @@ const liquidityStats = useMemo(() => {
   });
 
   return stats;
-}, [filteredEvents, contracts]);
+}, [events, contracts]);
 
+// 2. Filtered & sorted events — uses liquidityStats for sort
+const filteredEvents = useMemo(() => {
+  return (events || [])
+    .filter((e) => {
+      if (!e.event_id || !e.event_date) return false;
+
+      const matchesSearch = (e.title || "").toLowerCase().includes(debouncedSearch.toLowerCase().trim());
+      const matchesCategory = !categoryFilter || e.category === categoryFilter;
+
+      const eventDate = new Date(e.event_date);
+      const isUpcoming = includePastEvents || (!isNaN(eventDate.getTime()) && eventDate > now);
+
+      return matchesSearch && matchesCategory && isUpcoming;
+    })
+    .sort((a, b) => {
+      if (!sortBy.field) return 0;
+
+      if (sortBy.field === "event_date") {
+        const dateA = new Date(a.event_date);
+        const dateB = new Date(b.event_date);
+        return sortBy.direction === "asc" ? dateA - dateB : dateB - dateA;
+      }
+
+      if (sortBy.field === "title") {
+        return sortBy.direction === "asc"
+          ? (a.title || "").localeCompare(b.title || "")
+          : (b.title || "").localeCompare(a.title || "");
+      }
+
+      // Liquidity sorting — safe now
+      if (sortBy.field === "totalOpen" || sortBy.field === "totalAccepted") {
+        const statsA = liquidityStats[a.event_id] || { totalOpen: "0", totalAccepted: "0" };
+        const statsB = liquidityStats[b.event_id] || { totalOpen: "0", totalAccepted: "0" };
+        const valA = parseFloat(sortBy.field === "totalOpen" ? statsA.totalOpen : statsA.totalAccepted) || 0;
+        const valB = parseFloat(sortBy.field === "totalOpen" ? statsB.totalOpen : statsB.totalAccepted) || 0;
+        return sortBy.direction === "asc" ? valA - valB : valB - valA;
+      }
+
+      return 0;
+    });
+}, [events, debouncedSearch, categoryFilter, sortBy, includePastEvents, now, liquidityStats]);
 
 
 

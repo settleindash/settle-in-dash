@@ -24,6 +24,104 @@ const HowItWorks = () => {
             Welcome to Settle In Dash! Learn how to create and accept events and contracts on our testnet platform, where you can practice without using real funds.
           </p>
 
+
+{/* Payment & Fee Structure — PRECISE */}
+<section className="border-b border-gray-200 pb-4">
+  <button
+    className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
+    onClick={() => toggleSection("fees")}
+  >
+    <span className="mr-2">
+      {openSections.fees ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
+    </span>
+    Payment & Fee Structure
+  </button>
+  {openSections.fees && (
+    <div className="text-sm text-gray-600 space-y-4">
+      <p>
+        Settle In Dash is built to be fair and transparent. On testnet, the platform covers all real network fees so you pay nothing extra. On future mainnet, additional fees are only deducted from the winner’s share at settlement.
+      </p>
+
+      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <h4 className="text-md font-semibold text-gray-700 mb-2">Network Fees (Platform Covers Them)</h4>
+        <ul className="list-disc list-inside space-y-2">
+          <li>
+            <strong>What:</strong> Tiny blockchain fees (~0.0001–0.001 DASH per transaction, paid to miners)
+          </li>
+          <li>
+            <strong>When:</strong> Every time funds move (creation, acceptance, move to new multisig, settlement)
+          </li>
+          <li>
+            <strong>Who pays:</strong> The platform covers these for you — you never pay them
+          </li>
+          <li>
+            <strong>Who receives:</strong> Dash miners (standard network cost)
+          </li>
+        </ul>
+        <p className="mt-3 text-xs text-gray-500 italic">
+          You get the full experience with zero network fee cost.
+        </p>
+      </div>
+
+      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <h4 className="text-md font-semibold text-gray-700 mb-2">Cancellation or Refund</h4>
+        <ul className="list-disc list-inside space-y-2">
+          <li>
+            <strong>What happens:</strong> Creator gets back stake minus a pre-defined <code>TX_FEE</code> (currently 0.00001 DASH)
+          </li>
+          <li>
+            <strong>Who pays:</strong> Deducted from the stake (creator receives slightly less)
+          </li>
+          <li>
+            <strong>Difference (dust):</strong> If the real network fee is lower than <code>TX_FEE</code>, the small leftover stays as harmless dust in the multisig address forever
+          </li>
+          <li>
+            <strong>Platform fees:</strong> Never collected in cancellation/refund — only network fees apply
+          </li>
+        </ul>
+        <p className="mt-3 text-xs text-gray-500 italic">
+          This <code>TX_FEE</code> is a safety buffer — any residual dust stays locked in the multisig.
+        </p>
+      </div>
+
+      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <h4 className="text-md font-semibold text-gray-700 mb-2">Platform & Event Fees (Only at Settlement, Winner Pays)</h4>
+        <ul className="list-disc list-inside space-y-2">
+          <li>
+            <strong>What:</strong> Small percentage (e.g., 3% total) deducted only from the winner’s payout
+          </li>
+          <li>
+            <strong>When:</strong> During final settlement after event resolution
+          </li>
+          <li>
+            <strong>Breakdown:</strong>
+            <ul className="list-disc list-inside ml-6 mt-1">
+              <li>Platform fee (2%) → goes to platform address</li>
+              <li>Event creator fee (1%) → goes to the event creator’s wallet (you get your full 1% if you win)</li>
+            </ul>
+          </li>
+          <li>
+            <strong>Who pays:</strong> Only the winner (deducted from their winnings)
+          </li>
+          <li>
+            <strong>Winner gets:</strong> Full pot minus 3% fees (platform covers the settlement network fee)
+          </li>
+          <li>
+            <strong>Note:</strong> On testnet, these fees are disabled — you get the full pot.
+          </li>
+        </ul>
+      </div>
+
+      <p className="mt-2 text-gray-500 text-xs">
+        <strong>Tip:</strong> All transactions and fees are transparent on the Dash blockchain. Check any txid on{" "}
+        <a href="https://testnet-insight.dashevo.org/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+          testnet-insight.dashevo.org
+        </a>.
+      </p>
+    </div>
+  )}
+</section>
+
           {/* What You Need for Signing */}
           <section className="border-b border-gray-200 pb-4">
             <button
@@ -161,7 +259,123 @@ const HowItWorks = () => {
             )}
           </section>
 
-{/* Double-Spend & Stray Funds Protection — NEW SECTION */}
+  {/* Creating a Contract — NEW */}
+          <section className="border-b border-gray-200 pb-4">
+            <button
+              className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
+              onClick={() => toggleSection("creating")}
+            >
+              <span className="mr-2">
+                {openSections.creating ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
+              </span>
+              Creating a Contract
+            </button>
+            {openSections.creating && (
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>Creating a contract lets you offer a bet on an event’s outcome that others can accept.</p>
+                <ol className="list-decimal list-inside space-y-2">
+                  <li>
+                    <strong>Find an Event:</strong> Browse the Marketplace for upcoming events with clear outcomes (e.g., "Team A Win", "Draw", "Over 2.5").
+                  </li>
+                  <li>
+                    <strong>Connect Wallet:</strong> Enter your Dash testnet wallet address (starts with 'y') and sign the message <code>SettleInDash:your_address</code> using Dash Core or Android Dash Wallet.
+                  </li>
+                  <li>
+                    <strong>Fill the Form:</strong> Select the event, choose an outcome, set your stake (testnet DASH), odds (e.g., 2.00), and acceptance deadline (before event).
+                  </li>
+                  <li>
+                    <strong>Lock Funds:</strong> Provide your stake transaction details (txid, vout, amount) from your wallet, sign the locking transaction, and submit.
+                  </li>
+                  <li>
+                    <strong>Wait for Acceptance:</strong> Your contract appears in the Order Book. If accepted, both stakes are locked. If not, you can reclaim your funds after the deadline.
+                  </li>
+                </ol>
+                <p className="mt-2 text-gray-500 text-xs">
+                  <strong>Tip:</strong> Set a realistic deadline so others have time to accept. All funds stay safe in a shared multisig wallet.
+                </p>
+              </div>
+            )}
+          </section>
+
+          {/* Accepting a Contract — NEW */}
+          <section className="border-b border-gray-200 pb-4">
+            <button
+              className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
+              onClick={() => toggleSection("accepting")}
+            >
+              <span className="mr-2">
+                {openSections.accepting ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
+              </span>
+              Accepting a Contract
+            </button>
+            {openSections.accepting && (
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>Accepting a contract means you take the opposite side of someone else’s bet.</p>
+                <ol className="list-decimal list-inside space-y-2">
+                  <li>
+                    <strong>Find a Contract:</strong> Go to the Order Book for an event, browse open sell positions sorted by highest odds.
+                  </li>
+                  <li>
+                    <strong>Connect Wallet:</strong> Enter your Dash testnet wallet address and sign the message <code>SettleInDash:your_address</code>.
+                  </li>
+                  <li>
+                    <strong>Send Matching Stake:</strong> Scan the QR code or copy the multisig address and send the exact stake amount shown (same as creator’s stake).
+                  </li>
+                  <li>
+                    <strong>Validate & Accept:</strong> Paste the transaction ID of your stake send, validate it (InstantSend supported), then click “Accept Contract”.
+                  </li>
+                  <li>
+                    <strong>Funds Locked:</strong> Both stakes move to a new secure 3-of-3 multisig (creator, you, oracle). Wait for event resolution to settle.
+                  </li>
+                </ol>
+                <p className="mt-2 text-gray-500 text-xs">
+                  <strong>Tip:</strong> Use the multisig address from your wallet tx history if you lose the QR code. Only one person can accept — first come, first served!
+                </p>
+              </div>
+            )}
+          </section>
+
+          {/* Settling a Contract — NEW */}
+          <section className="border-b border-gray-200 pb-4">
+            <button
+              className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
+              onClick={() => toggleSection("settling")}
+            >
+              <span className="mr-2">
+                {openSections.settling ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
+              </span>
+              Settling a Contract
+            </button>
+            {openSections.settling && (
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>Settling happens after the event — you or the other party submit the outcome.</p>
+                <ol className="list-decimal list-inside space-y-2">
+                  <li>
+                    <strong>Find Your Contract:</strong> Go to Settle page, search by the multisig address (old or new) from your wallet tx history.
+                  </li>
+                  <li>
+                    <strong>Connect Wallet:</strong> Enter your wallet (creator or accepter) and sign the message <code>SettleInDash:your_address</code>.
+                  </li>
+                  <li>
+                    <strong>Choose Outcome:</strong> Select what actually happened (e.g., "Draw", "Team A Win") from the event’s possible outcomes.
+                  </li>
+                  <li>
+                    <strong>Add Reasoning (optional):</strong> Write a short explanation (max 500 characters).
+                  </li>
+                  <li>
+                    <strong>Submit:</strong> Confirm your submission — the backend verifies your signature and updates the contract.
+                  </li>
+                  <li>
+                    <strong>Resolution:</strong> If both parties agree → contract settles automatically. If not → escalates to Twist (oracle resolves).
+                  </li>
+                </ol>
+                <p className="mt-2 text-gray-500 text-xs">
+                  <strong>Tip:</strong> Only creator or accepter can submit. Funds stay locked in the final 3-of-3 multisig until settled.
+                </p>
+              </div>
+            )}
+          </section>
+{/* Double-Spend & Stray Funds Protection */}
 <section className="border-b border-gray-200 pb-4">
   <button
     className="flex items-center w-full text-left text-lg font-semibold text-gray-700 mb-2"
@@ -174,39 +388,36 @@ const HowItWorks = () => {
         <ChevronDownIcon className="w-5 h-5" />
       )}
     </span>
-    <span className="text-green-600 font-bold">Your Funds Are 100% Protected</span>
+    Your Funds Are 100% Protected
   </button>
   {openSections.protection && (
-    <div className="text-sm text-gray-700 space-y-3 bg-green-50 p-4 rounded-lg border border-green-200">
-      <p className="font-semibold text-green-800 mb-3">
-        No one can steal your money — even with 0 confirmations.
+    <div className="text-sm text-gray-600 space-y-3">
+      <p>
+        All funds are locked securely in multisig wallets and protected by the Dash blockchain. No one can steal or misuse them — even with 0 confirmations.
       </p>
 
-      <ul className="list-disc list-inside space-y-2 text-gray-700">
-        <li>
-          <strong>Double-Accept Protection:</strong> Only <strong>one person</strong> can ever accept a contract — even if two people send funds at the same time.
-          <br />
-          <span className="text-xs text-gray-600">
-            We check Before you see a QR code, we check the blockchain (including unconfirmed transactions). If anyone already sent funds, you are blocked instantly.
-          </span>
-        </li>
-        <li>
-          <strong>Stray Funds Auto-Refund:</strong> If someone accidentally sends extra DASH to a contract (e.g., trying to front-run), our oracle automatically detects and refunds it.
-          <br />
-          <span className="text-xs text-gray-600">
-            check Runs every 15 minutes — no funds ever get stuck.
-          </span>
-        </li>
-        <li>
-          <strong>No Trust Required:</strong> Everything is enforced by the Dash blockchain itself — not by us.
-        </li>
-      </ul>
+      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <ul className="list-disc list-inside space-y-2">
+          <li>
+            <strong>Double-Accept Protection:</strong> Only one person can ever accept a contract. We check the blockchain (including unconfirmed transactions) before showing the QR code. If funds are already sent, you are blocked instantly.
+          </li>
+          <li>
+            <strong>Stray/Excess Funds Auto-Refund:</strong> If someone accidentally sends extra DASH (e.g., front-running), our oracle automatically detects and refunds it every 15 minutes. No funds get stuck.
+          </li>
+          <li>
+            <strong>Secure Multisig Escrow:</strong> Funds are locked in 2-of-3 (during open) or 3-of-3 (after acceptance) multisig wallets — requiring creator, accepter, and oracle agreement to release.
+          </li>
+          <li>
+            <strong>Pre-Signed Refunds:</strong> Every contract has a pre-signed refund transaction stored in the database — if not accepted or expired, you can reclaim your stake (minus small network fee).
+          </li>
+          <li>
+            <strong>Oracle Signing:</strong> All moves and settlements are signed by a trusted oracle, ensuring fairness and preventing unauthorized access.
+          </li>
+        </ul>
+      </div>
 
-      <p className="mt-4 text-green-800 font-bold text-center text-lg">
-        Safer than Polymarket. Safer than any prediction market.
-      </p>
-      <p className="text-center text-sm text-gray-600">
-        You are protected by math, not promises.
+      <p className="mt-2 text-gray-500 text-xs">
+        Everything is enforced by the Dash blockchain itself — transparent, verifiable, and secure.
       </p>
     </div>
   )}
@@ -316,9 +527,6 @@ const HowItWorks = () => {
                 </p>
                 <ol className="list-decimal list-inside space-y-2">
                   <li>
-                    <strong>Check Available Funds:</strong> Before locking, use Dash Core’s <strong>Wallet &gt; Transactions</strong> or <code>listunspent</code> to confirm you have enough testnet DASH.
-                  </li>
-                  <li>
                     <strong>Verify Locked Funds:</strong> After locking, note the shared wallet address and transaction ID from the contract details. Check them on a testnet block explorer like{" "}
                     <a
                       href="https://testnet-insight.dash.org/insight/"
@@ -339,6 +547,7 @@ const HowItWorks = () => {
               </div>
             )}
           </section>
+
 
           {/* Troubleshooting Tips */}
           <section>

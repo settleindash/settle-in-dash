@@ -1,75 +1,80 @@
 // src/pages/Support.jsx
-// Provides support information and FAQs for the Settle In DASH decentralized prediction marketplace.
+// Updated 2026: Added Grok monitoring & Twist details
 
 import { Link } from "react-router-dom";
-import PageHeader from "../utils/formats/PageHeader.jsx"; // Import PageHeader for consistent headline
+import PageHeader from "../utils/formats/PageHeader.jsx";
 
 const Support = () => {
   return (
     <div className="min-h-screen bg-background p-4">
-      <PageHeader title="Support Center" /> {/* Use PageHeader for consistency */}
+      <PageHeader title="Support Center" />
       <main className="max-w-3xl mx-auto p-4 mt-6">
         <p className="text-gray-600 mb-6 text-base">
-          Welcome to Settle In DASH’s Support Center! We’re here to help you navigate our decentralized prediction marketplace. Explore our FAQs below or contact us at{" "}
-          <a
-            href="mailto:support@settleindash.com"
-            className="text-blue-500 hover:underline"
-            aria-label="Email support"
-          >
-            support@settleindash.com
-          </a>.
+          Welcome to Settle In Dash’s Support Center! We’re here to help you navigate our decentralized prediction marketplace on Dash testnet. All contracts are for testing only — no real funds are at risk.
         </p>
+
+
+  {/* New: Link to How It Works — Aligned with page style */}
+<div className="mb-8 bg-gray-50 p-4 rounded-lg border border-gray-200">
+  <p className="text-gray-700 font-medium mb-2">
+    Want a step-by-step guide to the full platform?
+  </p>
+  <Link
+    to="/how-it-works"
+    className="text-blue-600 hover:underline font-medium flex items-center gap-2"
+  >
+    View the complete "How It Works" guide →
+  </Link>
+</div>
+
 
         <h3 className="text-xl font-medium text-blue-800 mb-4">Frequently Asked Questions</h3>
         <div className="space-y-6 mb-8">
           <div>
             <h4 className="text-lg font-medium text-gray-900">How do I create a contract?</h4>
             <p className="text-gray-600 text-sm">
-              Connect your DASH wallet, navigate to the Create page, and fill out the form with a clear, verifiable question (e.g., “Will Bitcoin reach $100,000 by December 31, 2026?”), a stake (minimum 1 DASH), a category, and an event date with an acceptance deadline. An additional contract worth 10% of the stake is automatically created. As the Creator, you take the “Sell” (Lay) position, betting against the outcome. Your contract will be listed on the Marketplace for others to accept.
+              Go to the Marketplace, choose an upcoming event, and click “Create Contract.” Connect your Dash testnet wallet (address starts with 'y'), select an outcome, set your stake amount (testnet DASH), odds (e.g., 2.00), and an acceptance deadline (before the event). Your stake is locked in a secure 2-of-3 multisig (you, placeholder, oracle). The contract appears in the Order Book for others to accept. No real funds are involved — this is testnet practice.
             </p>
           </div>
+
           <div>
             <h4 className="text-lg font-medium text-gray-900">How do I accept a contract?</h4>
             <p className="text-gray-600 text-sm">
-              Browse the Marketplace, select an open contract, and click “Accept.” You’ll need to connect your DASH wallet and stake an amount matching the Creator’s stake, plus an additional contract worth 10% of the stake. You’ll take the “Buy” (Back) position, betting on the outcome.
+              Browse the Order Book for an open contract. Click “Accept,” connect your Dash testnet wallet, and send the exact matching stake to the multisig address shown (use QR code or copy-paste). Validate the transaction (InstantSend supported for fast confirmation). Funds move to a new secure 3-of-3 multisig (creator, you, oracle). The contract is now locked and waiting for event resolution. All on testnet — no real money.
             </p>
           </div>
+
           <div>
-            <h4 className="text-lg font-medium text-gray-900">What happens during contract settlement?</h4>
+            <h4 className="text-lg font-medium text-gray-900">How do I settle a contract?</h4>
             <p className="text-gray-600 text-sm">
-              After the event concludes, you and the other party have 48 hours to agree on the outcome. The Winner receives their net winnings after a 2% platform fee, and both parties’ 10% additional contracts are settled per the smart contract rules. If no agreement is reached, a Twist (Grok resolution) is triggered.
+              After the event, go to the Settle page. Search by the multisig address (old or new) from your wallet history. Connect your wallet (creator or accepter) and sign the message. Select the correct outcome from the event’s possible outcomes, add optional reasoning, and submit. The backend verifies your signature and updates the contract. If both parties agree → settled automatically. If not → escalates to Twist (oracle resolution). No real funds are at stake — pure testnet practice.
             </p>
           </div>
+
           <div>
-            <h4 className="text-lg font-medium text-gray-900">What is a Twist?</h4>
+            <h4 className="text-lg font-medium text-gray-900">What happens in a Twist?</h4>
             <p className="text-gray-600 text-sm">
-              A Twist is our dispute resolution process. If you and the other party disagree on the outcome, Grok, our AI oracle, analyzes public data to determine the Winner within 48 hours. The Winner receives their net winnings after a 2% platform fee and retains their 10% additional contract, while the loser forfeits their stake and 10% additional contract to the Winner. All resolutions are published in our <Link to="/transparency" className="text-blue-500 hover:underline">Transparency Portal</Link>.
+              Grok (our AI oracle) continuously monitors all events every 15 minutes. If the creator and accepter disagree on the outcome after the acceptance deadline, the contract automatically escalates to a Twist. Grok analyzes public data sources to determine the correct outcome within minutes to hours. The winner receives the full pot (minus small network fees), while the loser forfeits their stake. All resolutions are transparent and published in our Transparency Portal. Remember: this is testnet — no real money is involved.
             </p>
           </div>
-          <div>
-            <h4 className="text-lg font-medium text-gray-900">What are the fees?</h4>
-            <p className="text-gray-600 text-sm">
-              A 2% platform fee is applied to the Winner’s net winnings. An additional contract worth 10% of the stake is required from both parties, settled per smart contract rules upon honest settlement or forfeited by the loser in a Twist. If a Twist is unresolvable, a 1% platform fee applies, with stakes and additional contracts refunded.
-            </p>
-          </div>
+
           <div>
             <h4 className="text-lg font-medium text-gray-900">What if I encounter an error?</h4>
             <p className="text-gray-600 text-sm">
-              Ensure your wallet is connected and has sufficient DASH for stakes and additional contracts. If issues persist, contact us at{" "}
-              <a
-                href="mailto:support@settleindash.com"
-                className="text-blue-500 hover:underline"
-                aria-label="Email support"
-              >
-                support@settleindash.com
-              </a>{" "}
-              with details of the error.
+              Most issues relate to wallet connection, insufficient testnet DASH, or invalid signatures. Try:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Getting free testnet DASH from <a href="https://testnet-faucet.dash.org/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">testnet-faucet.dash.org</a></li>
+                <li>Ensuring Dash Core or Android Dash Wallet is in testnet mode</li>
+                <li>Double-checking the signed message matches exactly</li>
+              </ul>
+              If problems persist, contact us at <a href="mailto:support@settleindash.com" className="text-blue-500 hover:underline">support@settleindash.com</a> with details.
             </p>
           </div>
+
           <div>
-            <h4 className="text-lg font-medium text-gray-900">How can I view resolved disputes?</h4>
+            <h4 className="text-lg font-medium text-gray-900">How can I verify everything on-chain?</h4>
             <p className="text-gray-600 text-sm">
-              Visit our <Link to="/transparency" className="text-blue-500 hover:underline">Transparency Portal</Link> to view all Twist resolutions, including Grok’s reasoning and data sources. This ensures fairness and accountability for all disputes.
+              All funds, moves, and settlements are on the Dash testnet blockchain. Use <a href="https://testnet-insight.dashevo.org/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">testnet-insight.dashevo.org</a> to check multisig addresses, transaction IDs, and balances. Everything is transparent and verifiable.
             </p>
           </div>
         </div>
