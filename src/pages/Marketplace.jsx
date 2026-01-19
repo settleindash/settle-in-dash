@@ -35,7 +35,7 @@ console.log(Intl.DateTimeFormat().resolvedOptions().timeZone);  // What timezone
   const fetchData = useCallback(async () => {
     if (hasFetched) return;
     await getEvents({ status: "open" });
-    await fetchContracts({}); // ← NEW: fetch all contracts
+    await fetchContracts({ status: ["open", "accepted"] });
     setHasFetched(true);
   }, [getEvents, fetchContracts, hasFetched]);
 

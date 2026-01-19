@@ -33,6 +33,8 @@ const CreateContract = () => {
   const [acceptanceDeadline, setAcceptanceDeadline] = useState("");
   const [creatorPublicKey, setCreatorPublicKey] = useState("");
   const [error, setError] = useState("");
+  const [validationError, setValidationError] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [walletConnected, setWalletConnected] = useState(false);
   const [message, setMessage] = useState("");
   const [multisigAddress, setMultisigAddress] = useState("");
@@ -234,126 +236,122 @@ console.log(new Date("2026-01-20T20:00:00Z").toLocaleString());  // Should show 
   // Transaction validation
   // -----------------------------------------------------------------
 
-const validateTransaction = async (txid, expectedDestination, expectedAmount, type) => {
-  if (!/^[0-9a-fA-F]{64}$/.test(txid)) {
-    setError("Invalid transaction ID format (64 hex characters required).");
-    return false;
-  }
-
-  const maxAttempts = 12;          // ~2 minutes total – good for testnet delays
-  const delayMs = 10000;           // 10 seconds – gives InstantSend time to lock
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      setLoading(true);
-      setMessage(`Validating stake transaction${attempt > 1 ? ` (attempt ${attempt}/${maxAttempts})` : ''}...`);
-
-      const response = await fetch("https://settleindash.com/api/contracts.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "validate_transaction",
-          data: {
-            txid,
-            expected_destination: expectedDestination,
-            expected_amount: Number(expectedAmount),
-            min_confirmations: 0,  // Let backend decide based on InstantSend
-          },
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status} - ${result.message || 'Unknown error'}`);
-      }
-
-      if (result.success) {
-        console.log(`${type} transaction validated:`, txid);
-        setMessage("Stake transaction successfully validated!");
-        return true;
-      }
-
-      // Smart retry logic based on backend message
-      const msg = result.message?.toLowerCase() || "";
-      if (msg.includes("instant") || msg.includes("confirm") || msg.includes("waiting") || msg.includes("lock")) {
-        setError(result.message || "Transaction not yet confirmed or InstantSend-locked. Retrying...");
-      } else {
-        // Fatal error (amount mismatch, wrong address, etc.)
-        setError(result.message || "Transaction validation failed. Please check details.");
-        return false; // stop retrying
-      }
-
-      // Continue retry
-      if (attempt < maxAttempts) {
-        await new Promise(r => setTimeout(r, delayMs));
-        continue;
-      }
-
-      // Max attempts reached
-      setError("Validation timeout after 2 minutes. The transaction may still be processing – please try again later or check on a Dash explorer.");
+ const validateTransaction = async (txid, expectedDestination, expectedAmount, type) => {
+    if (!/^[0-9a-fA-F]{64}$/.test(txid)) {
+      setValidationError("Invalid transaction ID format (64 hex characters required).");
       return false;
-
-    } catch (err) {
-      console.error("Validation error:", err);
-      setError(`Failed to contact validation server: ${err.message}`);
-      return false;
-    } finally {
-      setLoading(false);
     }
-  }
 
-  return false;
-};
+    setValidationError(""); // Clear previous
+    const maxAttempts = 12;
+    const delayMs = 10000;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        setLoading(true);
+        setMessage(`Validating stake transaction${attempt > 1 ? ` (attempt ${attempt}/${maxAttempts})` : ''}...`);
+
+        const response = await fetch("https://settleindash.com/api/contracts.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "validate_transaction",
+            data: {
+              txid,
+              expected_destination: expectedDestination,
+              expected_amount: Number(expectedAmount),
+              min_confirmations: 0,
+            },
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status} - ${result.message || 'Unknown error'}`);
+        }
+
+        if (result.success) {
+          console.log(`${type} transaction validated:`, txid);
+          setMessage("Stake transaction successfully validated!");
+          setValidationError("");
+          return true;
+        }
+
+        const msg = result.message?.toLowerCase() || "";
+        const errorCode = result.error_code || "";
+
+        if (errorCode === "amount_mismatch" || msg.includes("amount mismatch") || msg.includes("stake amount")) {
+          const errorMsg = result.message || `Wrong amount sent. Expected: ${expectedAmount} DASH. Please send exactly this amount.`;
+          setValidationError(errorMsg);
+          return false;
+        } else if (msg.includes("instant") || msg.includes("confirm") || msg.includes("waiting") || msg.includes("lock")) {
+          setValidationError(result.message || "Transaction not yet confirmed or InstantSend-locked. Retrying...");
+        } else if (msg.includes("already")) {
+          setMessage("Transaction already processed — contract may be accepted.");
+          setValidationError("");
+          return true;
+        } else {
+          setValidationError(result.message || "Transaction validation failed. Please check details.");
+          return false;
+        }
+
+        if (attempt < maxAttempts) {
+          await new Promise(r => setTimeout(r, delayMs));
+          continue;
+        }
+
+        setValidationError("Validation timeout after 2 minutes. Transaction may still be processing – try again later.");
+        return false;
+
+      } catch (err) {
+        console.error("Validation error:", err);
+        setValidationError(`Failed to contact validation server: ${err.message}`);
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    return false;
+  };
 
 const handleValidateTransactions = async () => {
-  if (!transactionId) {
-    setError("Please enter the stake transaction ID");
-    return;
-  }
+    if (!transactionId) {
+      setValidationError("Please enter the stake transaction ID");
+      return;
+    }
 
-  const amount = Number(stake);
-  if (isNaN(amount) || amount <= 0) {
-    setError("Stake amount must be greater than 0");
-    return;
-  }
+    const amount = Number(stake);
+    if (isNaN(amount) || amount <= 0) {
+      setValidationError("Stake amount must be greater than 0");
+      return;
+    }
 
-  setError(""); // Clear old errors
-  setMessage("Starting validation...");
+    setValidationError(""); // Clear
+    setMessage("Starting validation...");
 
-  const ok = await validateTransaction(transactionId, multisigAddress, amount, "stake");
+    const ok = await validateTransaction(transactionId, multisigAddress, amount, "stake");
 
-  if (ok) {
-    setStakeTxValidated(true);
-    setMessage("Stake transaction validated successfully! You can now create the contract.");
-  } else {
-    setStakeTxValidated(false);
-    // Error already set inside validateTransaction
-  }
-};
+    if (ok) {
+      setStakeTxValidated(true);
+      setMessage("Stake transaction validated successfully! You can now accept the contract.");
+    } else {
+      setStakeTxValidated(false);
+    }
+  };
 
   // -----------------------------------------------------------------
   // Form submission
   // -----------------------------------------------------------------
-  const handleSubmit = async (e) => {
+ const handleSubmit = async (e) => {
     e.preventDefault();
     if (!walletConnected || !signature) return setError("Please connect and sign first");
     if (!stakeTxValidated) return setError("Please validate the stake transaction");
 
     setLoading(true);
-    console.log("CreateContract: Submitting form", {
-      eventId,
-      outcome,
-      positionType,
-      stake,
-      odds,
-      walletAddress,
-      acceptanceDeadline,
-      creatorPublicKey,
-      multisigAddress,
-      transactionId,
-      signature,
-    });
+    setError("");
+    setSubmitError("");
 
     const validationResult = await validateContractCreation(
       {
@@ -375,8 +373,6 @@ const handleValidateTransactions = async () => {
       return;
     }
 
-    setError("");
-
     try {
       const result = await createContract({
         contract_id: `CONTRACT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -397,19 +393,32 @@ const handleValidateTransactions = async () => {
       });
 
       if (result.error) {
-        setError(result.error);
+        let userMsg = "Contract acceptance failed.";
+
+        if (result.error_code === "amount_mismatch") {
+          userMsg = result.message || "Wrong stake amount sent. Please send the exact required amount.";
+        } else if (result.message?.toLowerCase().includes("already")) {
+          userMsg = "Contract already accepted — funds are safe. Redirecting to marketplace...";
+          setSubmitError("");
+          setTimeout(() => navigate("/marketplace"), 1500);
+          return;
+        } else {
+          userMsg += " " + (result.error || result.message || "Unknown error");
+        }
+
+        setSubmitError(userMsg);
       } else {
-        console.log("CreateContract: Contract created, id:", result.contract_id);
+        setMessage("Contract accepted successfully!");
+        setSubmitError("");
         navigate("/marketplace");
       }
     } catch (err) {
-      setError("Failed to create contract: " + err.message);
-      console.error("CreateContract: Contract creation error:", err);
+      setSubmitError("Failed to accept contract: " + err.message);
+      console.error("Acceptance error:", err);
     } finally {
       setLoading(false);
     }
   };
-
 
 
   // -----------------------------------------------------------------
@@ -425,6 +434,7 @@ const handleValidateTransactions = async () => {
           </Link>
         </div>
         {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+        {message && <p className="text-green-500 text-sm mb-4">{message}</p>}
 
         {selectedEvent ? (
           <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-6">
@@ -439,14 +449,13 @@ const handleValidateTransactions = async () => {
                   <p className="text-gray-800">{selectedEvent.title || "N/A"}</p>
                 </div>
 
-                  <div>
-                    <span className="font-medium text-gray-700">Event Date & Time:</span>
-                    <p className="text-gray-800"> {formatCustomDate(selectedEvent.event_date)}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Shown in your local time zone (stored in UTC)
-                    </p>
-                  </div>
+                <div>
+                  <span className="font-medium text-gray-700">Event Date & Time:</span>
+                  <p className="text-gray-800">{formatCustomDate(selectedEvent.event_date)}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Shown in your local time zone (stored in UTC)
+                  </p>
+                </div>
 
                 <div>
                   <span className="font-medium text-gray-700">Category:</span>
@@ -696,36 +705,49 @@ const handleValidateTransactions = async () => {
                       aria-label="Stake transaction ID"
                     />
                     <button
+                      type="button"
                       onClick={handleValidateTransactions}
-                      className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
+                      className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm w-full"
                       disabled={loading || stakeTxValidated}
-                      aria-label="Validate transaction"
                     >
                       Validate Transaction
                     </button>
-                  </div>
 
-                  {stakeTxValidated && (
-                    <p className="text-green-500 text-sm mt-2">Stake transaction validated successfully!</p>
-                  )}
+                    {/* ERROR UNDER VALIDATE BUTTON */}
+                    {validationError && (
+                      <p className="text-red-500 text-sm mt-3 text-center font-medium">
+                        {validationError}
+                      </p>
+                    )}
+
+                    {stakeTxValidated && (
+                      <p className="text-green-500 text-sm mt-2 text-center">
+                        Stake transaction validated successfully!
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Messages */}
-            {message && <p className="text-green-500 text-sm mt-2">{message}</p>}
-            {loading && <p className="text-blue-500 text-sm mt-2">Processing…</p>}
-            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+            {/* Submit Button + ERROR UNDER ACCEPT BUTTON */}
+            <div className="mt-8">
+              <button
+                type="submit"
+                className="w-full bg-orange-500 text-white py-3 rounded hover:bg-orange-600 disabled:opacity-50 text-lg font-bold"
+                disabled={contractLoading || !walletConnected || !signature || !stakeTxValidated || loading}
+              >
+                {loading || contractLoading ? "Accepting..." : "Accept Contract"}
+              </button>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 disabled:opacity-50 text-sm"
-              disabled={contractLoading || !walletConnected || !signature || !stakeTxValidated || loading}
-              aria-label="Create Contract"
-            >
-              {loading || contractLoading ? "Creating..." : "Create Contract"}
-            </button>
+              {/* ERROR RIGHT UNDER THE BUTTON */}
+              {submitError && (
+                <p className="text-red-500 text-sm mt-3 text-center font-medium">
+                  {submitError}
+                </p>
+              )}
+            </div>
+
           </form>
         ) : (
           <p className="text-gray-600 text-sm">No event selected. Please choose an event from the Marketplace.</p>

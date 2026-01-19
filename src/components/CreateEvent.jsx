@@ -244,6 +244,9 @@ const utcToLocalInput = (utcString) => {
       }
     }
 
+console.log("FINAL event_date sent to hook:", eventDate);  // Should be "...T14:00:00.000Z"
+console.log("Type of eventdate:", typeof eventDate);
+
     try {
       const result = await createEvent({
         title: title.trim(),

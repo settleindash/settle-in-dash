@@ -44,6 +44,8 @@ const Settle = () => {
 
   const validateSearchInput = (value) => validDashAddress.test(value);
 
+
+
 const searchForContract = async (multisig) => {
   setError("");
   const found = contracts.find(
@@ -51,13 +53,16 @@ const searchForContract = async (multisig) => {
   );
 
   if (found) {
-    const event = events.find((e) => e.event_id === found.event_id);
     setSelectedContract({
       ...found,
-      eventTitle: event ? event.title : "Unknown Event",
-      description: event ? event.description : "",          // ← Add this!
-      event_date: event ? event.event_date : null,          // ← Already used, but ensure
-      possible_outcomes: event ? event.possible_outcomes : null // ← For outcomes list
+      // Use joined event fields directly (fallback to defaults)
+      eventTitle: found.event_title || "Unknown Event",
+      description: found.event_description || "",
+      event_date: found.event_date || null,
+      possible_outcomes: found.event_possible_outcomes || null,
+      // Bonus: add resolution info if needed
+      eventResolution: found.event_resolution || null,
+      eventStatus: found.event_status || null
     });
   } else {
     setError("No contract found for this multisig address.");

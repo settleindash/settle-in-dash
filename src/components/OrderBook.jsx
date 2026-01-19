@@ -23,7 +23,7 @@ const OrderBook = () => {
   // Fetch contracts for this event
   useEffect(() => {
     if (event_id) {
-      fetchContracts({ event_id, status: null });
+      fetchContracts({ event_id, status: "open", sortBy: "odds", sortDir: "desc" });
     }
   }, [event_id, fetchContracts]);
 
@@ -43,7 +43,7 @@ const OrderBook = () => {
   // Refresh handler
   const handleRefresh = () => {
     if (event_id) {
-      fetchContracts({ event_id, status: "open" });
+      fetchContracts({ event_id, status: "open", sortBy: "odds", sortDir: "desc" });
     }
   };
 

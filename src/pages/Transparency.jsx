@@ -1,50 +1,41 @@
 // src/pages/Transparency.jsx
-// Displays contracts with filtering via FilterContracts, using PageHeader for consistent headline formatting.
-
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useContracts } from "../hooks/useContracts";
-import { useEvents } from "../hooks/useEvents";
 import FilterContracts from "../components/FilterContracts";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 
 const Transparency = () => {
   const { contracts, fetchContracts, loading, error: apiError } = useContracts();
-  const { events, getEvents } = useEvents();
 
-  // Fetch contracts and events on mount
+  // Fetch all relevant contracts (full history)
   useEffect(() => {
-    console.log("Transparency: Fetching contracts and events");
-    fetchContracts({}); // Added to fetch contracts
-    getEvents({ status: "open" });
-  }, [fetchContracts, getEvents]);
-
-  // Debug contracts and events
-  useEffect(() => {
-    console.log("Transparency: Raw contracts from useContracts:", contracts);
-    console.log("Transparency: Raw events from useEvents:", events);
-  }, [contracts, events]);
-
-  // Enrich contracts with eventTitle
-  const enrichedContracts = useMemo(() => {
-    console.log("Transparency: Enriching contracts with event titles");
-    const enriched = contracts.map((contract) => {
-      const event = events.find((e) => e.event_id === contract.event_id);
-      return {
-        ...contract,
-        eventTitle: event ? event.title : "Not set",
-      };
+    console.log("Transparency: Fetching contracts");
+    fetchContracts({ 
+      status: ["open", "accepted", "settled", "expired", "twist"]
     });
-    console.log("Transparency: Enriched contracts:", enriched);
-    return enriched;
-  }, [contracts, events]);
+  }, [fetchContracts]);
+
+  // Enrich with joined event fields
+  const enrichedContracts = useMemo(() => {
+    return contracts.map(contract => ({
+      ...contract,
+      eventTitle: contract.event_title || "Not set",
+      eventDescription: contract.event_description || "",
+      eventCategory: contract.event_category || "",
+      eventDate: contract.event_date || null,
+      eventPossibleOutcomes: contract.event_possible_outcomes || null,
+      eventResolution: contract.event_resolution || null,
+      eventWinningOutcome: contract.event_winning_outcome || null,
+      eventStatus: contract.event_status || null,
+    }));
+  }, [contracts]);
 
   const handleFilterChange = (filteredContracts) => {
     console.log("Transparency: Filtered Contracts:", filteredContracts);
   };
 
   const renderTable = (paginatedContracts) => {
-    console.log("Transparency: Paginated contracts:", paginatedContracts);
     return (
       <div className="mt-6">
         <h2 className="text-base sm:text-xl font-semibold mb-4">Contract Overview</h2>
@@ -58,16 +49,19 @@ const Transparency = () => {
                   <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[50px]">
                     Contract ID
                   </th>
-                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
+                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[120px]">
                     Event
                   </th>
-                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
+                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[80px]">
                     Outcome
                   </th>
-                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
+                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[80px]">
                     Winner
                   </th>
-                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[70px]">
+                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[100px]">
+                    Resolution
+                  </th>
+                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[100px]">
                     Created At
                   </th>
                 </tr>
@@ -84,16 +78,19 @@ const Transparency = () => {
                         {contract.contract_id}
                       </Link>
                     </td>
-                    <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
+                    <td className="p-1 sm:p-4 max-w-[120px] truncate break-words text-[10px] sm:text-xs">
                       {contract.eventTitle || "Not set"}
                     </td>
-                    <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
+                    <td className="p-1 sm:p-4 max-w-[80px] truncate break-words text-[10px] sm:text-xs">
                       {contract.outcome || "Not set"}
                     </td>
-                    <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
+                    <td className="p-1 sm:p-4 max-w-[80px] truncate break-words text-[10px] sm:text-xs">
                       {contract.winner || "Not set"}
                     </td>
-                    <td className="p-1 sm:p-4 max-w-[70px] truncate break-words text-[10px] sm:text-xs">
+                    <td className="p-1 sm:p-4 max-w-[100px] truncate break-words text-[10px] sm:text-xs">
+                      {contract.eventResolution || "—"}
+                    </td>
+                    <td className="p-1 sm:p-4 max-w-[100px] truncate break-words text-[10px] sm:text-xs">
                       {contract.created_at ? new Date(contract.created_at).toLocaleString() : "Not set"}
                     </td>
                   </tr>
@@ -129,10 +126,11 @@ const Transparency = () => {
           contracts={enrichedContracts}
           statusFilter="All"
           userWalletAddress=""
-          onFilterChange={handleFilterChange}
+          onFilterChange={() => {}}
           contractsPerPage={20}
           disabledFilters={[]}
           renderContent={renderTable}
+          showPastDeadlineOption={true}
         />
       </main>
     </div>
