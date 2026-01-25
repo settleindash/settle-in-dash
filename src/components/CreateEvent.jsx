@@ -1,5 +1,6 @@
 // src/components/CreateEvent.jsx
-// Improved: Added expected finish time, better Grok integration
+// Updated: Locked to exactly 3 outcomes: Yes / No / Event canceled
+// Enforces Yes/No question format
 
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -18,11 +19,13 @@ const CreateEvent = () => {
   // Form fields
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState(categories[0] || "");
-  const [eventDate, setEventDate] = useState(""); // Start time
-  const [expectedFinishDate, setExpectedFinishDate] = useState(""); // NEW: Expected end
-  const [possibleOutcomes, setPossibleOutcomes] = useState(["", ""]);
+  const [eventDate, setEventDate] = useState("");
+  const [expectedFinishDate, setExpectedFinishDate] = useState("");
   const [description, setDescription] = useState("");
   const [eventWalletAddress, setEventWalletAddress] = useState("");
+
+  // Fixed outcomes – always Yes / No / Event canceled
+  const fixedOutcomes = ["Yes", "No", "Event canceled"];
 
   // Wallet
   const [signature, setSignature] = useState("");
@@ -42,20 +45,7 @@ const CreateEvent = () => {
 
   const minDateTime = new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16);
 
-  // Outcome helpers (unchanged)
-  const addOutcome = () => setPossibleOutcomes([...possibleOutcomes, ""]);
-  const removeOutcome = (index) => {
-    if (possibleOutcomes.length > 2) {
-      setPossibleOutcomes(possibleOutcomes.filter((_, i) => i !== index));
-    }
-  };
-  const handleOutcomeChange = (index, value) => {
-    const newOutcomes = [...possibleOutcomes];
-    newOutcomes[index] = value;
-    setPossibleOutcomes(newOutcomes);
-  };
-
-  // Wallet connection (unchanged)
+  // Wallet connection
   const connectWallet = async () => {
     if (!eventWalletAddress) return setError("Please enter your wallet address");
     if (!/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(eventWalletAddress)) {
@@ -97,24 +87,12 @@ const CreateEvent = () => {
     setLoading(false);
   };
 
-// Helper: Convert Grok's UTC ISO string to local datetime-local format (YYYY-MM-DDTHH:mm)
-const utcToLocalInput = (utcString) => {
-  if (!utcString) return "";
-  const date = new Date(utcString);
-  if (isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 16); // Trim to match <input type="datetime-local">
-};
-
-  // Validate with Grok + AUTO-APPLY improvements immediately
+  // Validate with Grok + auto-apply
   const validateWithGrok = async () => {
-    const validOutcomes = possibleOutcomes.filter(o => o.trim());
-
-
     let missing = [];
     if (!title.trim()) missing.push("title");
     if (!category) missing.push("category");
     if (!eventDate) missing.push("event start date/time");
-    if (validOutcomes.length < 2) missing.push("at least 2 valid outcomes");
     if (!description.trim()) missing.push("description");
 
     if (missing.length > 0) {
@@ -122,14 +100,11 @@ const utcToLocalInput = (utcString) => {
       return;
     }
 
-    // Optional: Check finish > start
-    if (expectedFinishDate) {
-      const start = new Date(eventDate);
-      const finish = new Date(expectedFinishDate);
-      if (finish <= start) {
-        setError("Expected finish must be after start time");
-        return;
-      }
+    // Enforce Yes/No question format in title
+    const lowerTitle = title.toLowerCase();
+    if (!lowerTitle.includes("will") && !lowerTitle.includes("does") && !lowerTitle.includes("is") && !lowerTitle.includes("?")) {
+      setError("Title should be a clear Yes/No question (e.g., 'Will Team A win the match?')");
+      return;
     }
 
     const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -146,13 +121,11 @@ const utcToLocalInput = (utcString) => {
         body: JSON.stringify({
           title: title.trim(),
           category,
-          // ─── New fields ───
-          event_start_local: eventDate || null,             // e.g. "2026-01-20T21:00"
-          event_start_timezone: userTimeZone,               // "Europe/Copenhagen"
+          event_start_local: eventDate || null,
+          event_start_timezone: userTimeZone,
           expected_finish_local: expectedFinishDate || null,
           expected_finish_timezone: expectedFinishDate ? userTimeZone : null,
-              
-          possible_outcomes: validOutcomes,
+          possible_outcomes: fixedOutcomes,  // Always these 3
           description: description.trim(),
           user_timezone: userTimeZone,
         })
@@ -167,25 +140,20 @@ const utcToLocalInput = (utcString) => {
       } else {
         setGrokResponse(result);
 
-        // Auto-apply improvements immediately (restores old behavior)
         let applied = [];
 
-        // Description
         if (result.improved_description && result.improved_description !== description) {
           setDescription(result.improved_description);
           applied.push("description");
         }
 
-        // Start time
         if (result.suggested_start_time && result.suggested_start_timezone) {
-          // Only apply if different from current value
           if (result.suggested_start_time !== eventDate) {
             setEventDate(result.suggested_start_time);
             applied.push("start time");
           }
         }
 
-        // Finish time
         if (result.suggested_finish_time && result.suggested_finish_timezone) {
           if (result.suggested_finish_time !== expectedFinishDate) {
             setExpectedFinishDate(result.suggested_finish_time);
@@ -214,9 +182,6 @@ const utcToLocalInput = (utcString) => {
     setLoading(true);
     setError("");
 
-    const validOutcomes = possibleOutcomes.filter((o) => o.trim());
-    if (validOutcomes.length < 2) return setError("At least 2 outcomes required");
-
     const startTime = new Date(eventDate);
     if (isNaN(startTime.getTime())) {
       setError("Invalid start date format");
@@ -244,16 +209,13 @@ const utcToLocalInput = (utcString) => {
       }
     }
 
-console.log("FINAL event_date sent to hook:", eventDate);  // Should be "...T14:00:00.000Z"
-console.log("Type of eventdate:", typeof eventDate);
-
     try {
       const result = await createEvent({
         title: title.trim(),
         category,
         event_date: eventDate ? new Date(eventDate).toISOString() : null,
         expected_finish: expectedFinishDate ? new Date(expectedFinishDate).toISOString() : null,
-        possible_outcomes: validOutcomes,
+        possible_outcomes: fixedOutcomes,  // Always Yes/No/Canceled
         event_wallet_address: eventWalletAddress,
         signature,
         description: description.trim()
@@ -281,11 +243,12 @@ console.log("Type of eventdate:", typeof eventDate);
             Learn How It Works
           </Link>
         </div>
+
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-6">
           {/* Title */}
           <div className="mb-6">
             <label htmlFor="title" className="block text-lg font-bold text-primary mb-2">
-              Event Title <span className="text-red-500">*</span>
+              Yes/No Question Title <span className="text-red-500">*</span>
             </label>
             <input
               id="title"
@@ -293,9 +256,12 @@ console.log("Type of eventdate:", typeof eventDate);
               className="border p-2 rounded w-full text-sm sm:text-base"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Super Bowl 2026: Chiefs vs Eagles"
+              placeholder="e.g., Will Brighton win against Bournemouth on Jan 25?"
               required
             />
+            <p className="text-xs text-gray-600 mt-1">
+              Must be a clear Yes/No question. Grok will validate this.
+            </p>
           </div>
 
           {/* Category */}
@@ -338,7 +304,7 @@ console.log("Type of eventdate:", typeof eventDate);
             </p>
           </div>
 
-          {/*Expected Finish */}
+          {/* Expected Finish */}
           <div className="mb-6">
             <label htmlFor="expectedFinishDate" className="block text-lg font-bold text-primary mb-2">
               Expected Finish Date & Time (optional)
@@ -352,43 +318,25 @@ console.log("Type of eventdate:", typeof eventDate);
               onChange={(e) => setExpectedFinishDate(e.target.value)}
             />
             <p className="text-xs text-gray-600 mt-1">
-              e.g., expected end of match/debate. Helps Grok resolve faster.
+              Helps Grok resolve faster (e.g., expected end of match).
             </p>
           </div>
 
-          {/* Outcomes */}
+          {/* Fixed Outcomes – read-only */}
           <div className="mb-6">
             <label className="block text-lg font-bold text-primary mb-2">
-              Possible Outcomes <span className="text-red-500">*</span>
+              Possible Outcomes (fixed)
             </label>
-            {possibleOutcomes.map((outcome, index) => (
-              <div key={index} className="flex items-center mb-2">
-                <input
-                  type="text"
-                  className="border p-2 rounded flex-1 text-sm sm:text-base"
-                  value={outcome}
-                  onChange={(e) => handleOutcomeChange(index, e.target.value)}
-                  placeholder={`Outcome ${index + 1} (e.g., Chiefs Win)`}
-                  required
-                />
-                {possibleOutcomes.length > 2 && (
-                  <button
-                    type="button"
-                    className="ml-2 text-red-500 hover:text-red-600"
-                    onClick={() => removeOutcome(index)}
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            ))}
-            <button
-              type="button"
-              className="text-blue-500 hover:text-blue-600 text-sm"
-              onClick={addOutcome}
-            >
-              + Add Outcome
-            </button>
+            <div className="space-y-2">
+              {fixedOutcomes.map((outcome, index) => (
+                <div key={index} className="bg-gray-100 p-3 rounded-lg border border-gray-300 text-gray-700">
+                  {outcome}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-600 mt-2">
+              Only Yes/No questions are allowed. "Event canceled" handles refunds/draws.
+            </p>
           </div>
 
           {/* Description */}
@@ -401,7 +349,7 @@ console.log("Type of eventdate:", typeof eventDate);
               className="border p-3 rounded w-full text-sm h-40 resize-none"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe clearly: what happens, how it's decided, official sources (e.g., ESPN, official league site)..."
+              placeholder="Describe clearly: what must happen for Yes/No, official sources, cancellation rules..."
               required
             />
             <p className="text-xs text-gray-600 mt-1">
@@ -417,7 +365,7 @@ console.log("Type of eventdate:", typeof eventDate);
               disabled={grokLoading}
               className="w-full bg-purple-600 text-white py-4 rounded-lg font-bold hover:bg-purple-700 disabled:opacity-50"
             >
-            {grokLoading ? "Grok is thinking..." : "Validate with Grok"}
+              {grokLoading ? "Grok is thinking..." : "Validate with Grok"}
             </button>
           </div>
 
@@ -429,39 +377,24 @@ console.log("Type of eventdate:", typeof eventDate);
               </h3>
               <p className="text-sm whitespace-pre-wrap mb-2"><strong>Reasoning:</strong> {grokResponse.reasoning}</p>
 
-{grokResponse.suggested_start_time && (
-  <p className="text-sm italic text-gray-700">
-    <strong>Suggested Start Time (local):</strong>{" "}
-    {new Date(grokResponse.suggested_start_time).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    })} {" "} (in {grokResponse.suggested_start_timezone || userTimeZone})
-    <span className="text-xs text-gray-500 ml-2">
-      (UTC: {new Date(grokResponse.suggested_start_time + ':00')  // Add seconds to make valid ISO
-        .toLocaleString("en-US", {timeZone: grokResponse.suggested_start_timezone || userTimeZone})
-        .replace(/.*(\d{4}).*/, (m, y) => new Date(m).toISOString())})  // Compute UTC from local + tz
-    </span>
-  </p>
-)}
 
-{grokResponse.suggested_finish_time && (
-  <p className="text-sm italic text-gray-700">
-    <strong>Suggested Finish Time (local):</strong>{" "}
-    {new Date(grokResponse.suggested_finish_time).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    })} {" "} (in {grokResponse.suggested_finish_timezone || userTimeZone})
-    <span className="text-xs text-gray-500 ml-2">
-      (UTC: {new Date(grokResponse.suggested_finish_time + ':00')
-        .toLocaleString("en-US", {timeZone: grokResponse.suggested_finish_timezone || userTimeZone})
-        .replace(/.*(\d{4}).*/, (m, y) => new Date(m).toISOString())})
-    </span>
-  </p>
-)}
+              {grokResponse?.suggested_title && grokResponse.suggested_title !== title && (
+               <p className="text-sm italic text-blue-700 mt-2">
+                <strong>Suggested title:</strong> {grokResponse.suggested_title}
+                  </p>
+              )}
 
-              {grokResponse.timezone_note && (
-                <p className="text-sm italic text-gray-700 mt-2">
-                  <strong>Timezone Note:</strong> {grokResponse.timezone_note}
+              {grokResponse.suggested_start_time && (
+                <p className="text-sm italic text-gray-700">
+                  <strong>Suggested Start Time (local):</strong>{" "}
+                  {new Date(grokResponse.suggested_start_time).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                </p>
+              )}
+
+              {grokResponse.suggested_finish_time && (
+                <p className="text-sm italic text-gray-700">
+                  <strong>Suggested Finish Time (local):</strong>{" "}
+                  {new Date(grokResponse.suggested_finish_time).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                 </p>
               )}
             </div>

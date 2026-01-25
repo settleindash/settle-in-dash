@@ -82,18 +82,27 @@ const acceptContract = useCallback(
   [post]
 );
 
-// 4. settleContract
+// 4. settleContract — updated to accept partial_tx_hex
 const settleContract = useCallback(
-  async (contractId, resolution, reasoning, signerAddress, signature, message) => {
+  async (contractId, resolution, reasoning, signerAddress, signature, message, partialTxHex = '') => {
     try {
-      const result = await post("settle_contract", {
+      if (!partialTxHex) {
+        console.warn("DEBUG: No partial_tx_hex provided — only vote will be saved, no settlement");
+      }
+
+      const payload = {
         contract_id: contractId,
-        resolution, //caled claimedOutcome in ResolveTwistForm
+        resolution,
         reasoning,
         signer_address: signerAddress,
         signature,
-        message, 
-      });
+        message,
+        partial_tx_hex: partialTxHex,
+      };
+
+      console.log("DEBUG: settleContract sending:", payload);
+
+      const result = await post("settle_contract", payload);
       return result;
     } catch (err) {
       const msg = err.message || "Network error during settlement";
@@ -161,7 +170,29 @@ const verifySignature = useCallback(
   []
 );
 
-  // 8. listUnspent (for double-spend protection)
+
+// 8. generateUnsignedSettlementTx — gets unsigned raw tx hex from backend
+const generateUnsignedSettlementTx = useCallback(
+  async (contractId, resolution) => {
+    try {
+      const result = await post("generate_unsigned_settlement_tx", {
+        contract_id: contractId,
+        resolution,
+      });
+      if (!result.success) {
+        throw new Error(result.error || "Failed to generate unsigned tx");
+      }
+      return result;
+    } catch (err) {
+      const msg = err.message || "Network error generating tx";
+      setError(msg);
+      throw err;
+    }
+  },
+  [post]
+);
+
+  // 9. listUnspent (for double-spend protection)
   const listUnspent = useCallback(
     async (address, minconf = 0) => {
       return await post("listunspent", { address, minconf });
@@ -212,6 +243,7 @@ const verifySignature = useCallback(
       createContract,
       acceptContract,
       settleContract,
+      generateUnsignedSettlementTx, 
       validateTransaction,
       listUnspent,
       getTransactionInfo,
@@ -234,6 +266,7 @@ const verifySignature = useCallback(
       createContract,
       acceptContract,
       settleContract,
+      generateUnsignedSettlementTx, 
       validateTransaction,
       listUnspent,
       getTransactionInfo,

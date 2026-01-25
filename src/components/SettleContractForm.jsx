@@ -1,6 +1,5 @@
 // src/components/SettleContractForm.jsx
-// Improved: Outcome selection → Wallet signature verification → Submit
-// Matches ContractCard style: grey box, QR/manual sign, validation
+// Updated: Option A - Signed partial tx hex mandatory, no verification step
 
 import { useState, useMemo, useEffect } from "react";
 import { useEvents } from "../hooks/useEvents";
@@ -18,13 +17,15 @@ const SettleContractForm = ({
 
   const [claimedOutcome, setClaimedOutcome] = useState("");
   const [reasoning, setReasoning] = useState("");
+  const [selectedParty, setSelectedParty] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
-  const [signature, setSignature] = useState("");
-  const [manualSignature, setManualSignature] = useState("");
+  const [unsignedHex, setUnsignedHex] = useState("");
+  const [signedPartial, setSignedPartial] = useState("");
   const [walletConnected, setWalletConnected] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [message, setMessage] = useState("");
 
   const contract = filteredContracts.find((c) => c.contract_id === selectedContractId);
   if (!contract) return <p className="text-red-500">Contract not found.</p>;
@@ -33,101 +34,118 @@ const SettleContractForm = ({
     return parseOutcomes(contract?.possible_outcomes || []);
   }, [contract, parseOutcomes]);
 
-  // Wallet signature flow (same as ContractCard)
-  const connectWallet = async () => {
-    if (!walletAddress) return setError("Please enter your wallet address");
-    if (!/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(walletAddress)) {
-      return setError("Invalid Dash wallet address");
-    }
+  const partyOptions = [
+    {
+      value: "creator",
+      label: `Creator: ${contract.WalletAddress}`,
+      address: contract.WalletAddress,
+    },
+    {
+      value: "accepter",
+      label: `Accepter: ${contract.accepterWalletAddress || "Not yet accepted"}`,
+      address: contract.accepterWalletAddress,
+    },
+  ];
 
-    // Check if user is creator or accepter
-    if (walletAddress !== contract.WalletAddress && walletAddress !== contract.accepterWalletAddress) {
-      return setError("You must use the creator or accepter wallet address");
-    }
-
-    setError("");
-    try {
-      setLoading(true);
-      const url = await QRCode.toDataURL(`signmessage:${walletAddress}:SettleInDash:${walletAddress}:`);
-      setQrCodeUrl(url);
-    } catch (err) {
-      setError("Failed to generate QR code");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const verifyManualSignature = async () => {
-    if (!manualSignature) return setError("Please enter a signature");
-
-    try {
-      setLoading(true);
-      const response = await fetch("https://settleindash.com/api/contracts.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "verify_signature",
-          data: {
-            address: walletAddress,
-            message: `SettleInDash:${walletAddress}`,
-            signature: manualSignature,
-          },
-        }),
-      });
-      const result = await response.json();
-
-      if (result.isValid) {
-        setSignature(manualSignature);
-        setWalletConnected(true);
-        setError("");
-      } else {
-        setError("Invalid signature");
-      }
-    } catch (err) {
-      setError("Verification failed");
-    } finally {
-      setLoading(false);
+  const handlePartyChange = (e) => {
+    const party = e.target.value;
+    setSelectedParty(party);
+    const selected = partyOptions.find((opt) => opt.value === party);
+    if (selected && selected.address) {
+      setWalletAddress(selected.address);
+      setError("");
+    } else {
+      setWalletAddress("");
+      setError("Accepter wallet not set yet");
     }
   };
 
- const handleSubmit = async () => {
-  setShowConfirmation(false);
+const connectWallet = async () => {
+  if (!walletAddress) return setError("Please select your party");
 
-  if (!walletConnected || !signature) {
-    setError("Please connect and sign with your wallet first");
-    return;
-  }
+  try {
+    setLoading(true);
 
-  // The exact message that was signed (must match what was used in connectWallet)
-  const message = `SettleInDash:${walletAddress}`;
+    console.log("[FRONTEND DEBUG] Calling generate_unsigned_settlement_tx via proxy");
 
-  const result = await settleContract(
-    selectedContractId,
-    claimedOutcome,
-    reasoning,
-    walletAddress,
-    signature,
-    message
-  );
+    const partialRes = await fetch("https://settleindash.com/api/contracts.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "generate_unsigned_settlement_tx",
+        data: {
+          contract_id: selectedContractId,
+          resolution: claimedOutcome,
+        }
+      }),
+    });
 
-  if (result.success) {
-    setSelectedContract(null);
-    alert(result.message || "Outcome submitted successfully!");
-  } else {
-    setError(result.error || "Failed to submit outcome");
+    console.log("[FRONTEND DEBUG] Proxy status:", partialRes.status);
+
+    if (!partialRes.ok) {
+      const text = await partialRes.text();
+      console.error("[FRONTEND DEBUG] Proxy error response:", text);
+      throw new Error(`Proxy error ${partialRes.status}: ${text}`);
+    }
+
+    const partialData = await partialRes.json();
+    console.log("[FRONTEND DEBUG] Proxy response:", partialData);
+
+    if (!partialData.success) {
+      throw new Error(partialData.error || "Backend failed to generate tx");
+    }
+
+    const unsigned = partialData.unsigned_tx_hex;
+    setUnsignedHex(unsigned);
+
+    const url = await QRCode.toDataURL(`signmessage:${walletAddress}:${unsigned}`);
+    setQrCodeUrl(url);
+    setMessage("Sign this transaction hex in your wallet");
+  } catch (err) {
+    console.error("[FRONTEND DEBUG] connectWallet failed:", err);
+    setError("Failed to generate sign request: " + (err.message || "Unknown error"));
+  } finally {
+    setLoading(false);
   }
 };
 
+  const handleSubmit = async () => {
+    setShowConfirmation(false);
+
+    if (!walletConnected || !signedPartial.trim()) {
+      setError("Please sign and paste the transaction hex first");
+      return;
+    }
+
+    const result = await settleContract(
+      selectedContractId,
+      claimedOutcome,
+      reasoning,
+      walletAddress,
+      signedPartial,  // signed partial tx hex
+      `signmessage:${walletAddress}:${unsignedHex}` // optional
+    );
+
+    if (result.success) {
+      setSelectedContract(null);
+      alert(result.message || "Settlement submitted successfully!");
+    } else {
+      setError(result.error || "Failed to submit settlement");
+    }
+  };
+
   return (
-    <div className="p-4 bg-gray-50 rounded-lg">
-      <h3 className="text-md font-semibold text-gray-700 mb-4">Settle This Contract</h3>
+    <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
+      <h3 className="text-lg font-semibold text-gray-800 mb-5">Settle This Contract</h3>
 
       <div className="space-y-6">
         {/* Outcome */}
         <div>
-          <label className="text-md font-semibold text-gray-700 mb-3">Event Outcome</label>
+          <label className="block text-base font-medium text-gray-700 mb-2">
+            Event Outcome
+          </label>
           <select
-            className="border p-2 rounded w-full"
+            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             value={claimedOutcome}
             onChange={(e) => setClaimedOutcome(e.target.value)}
           >
@@ -142,65 +160,119 @@ const SettleContractForm = ({
 
         {/* Reasoning */}
         <div>
-          <label className="text-md font-semibold text-gray-700 mb-3">Reasoning (optional)</label>
+          <label className="block text-base font-medium text-gray-700 mb-2">
+            Reasoning (optional)
+          </label>
           <textarea
-            className="border p-2 rounded w-full min-h-[100px]"
+            className="w-full border border-gray-300 rounded-lg p-3 min-h-[120px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             value={reasoning}
             onChange={(e) => setReasoning(e.target.value)}
-            placeholder="Brief reason for your choice (e.g. 'Official source confirmed draw')"
+            placeholder="Brief explanation for your choice..."
             maxLength={500}
           />
-          <p className="text-sm text-gray-500">{reasoning.length}/500 characters</p>
+          <p className="text-sm text-gray-500 mt-1">{reasoning.length}/500 characters</p>
         </div>
 
-        {/* Wallet Signature - same as ContractCard */}
+        {/* Wallet selection */}
+        <div>
+          <label className="block text-base font-medium text-gray-700 mb-2">
+            Your Role & Wallet
+          </label>
+          <select
+            className="w-full border border-gray-300 rounded-lg p-3 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+            value={selectedParty}
+            onChange={handlePartyChange}
+          >
+            <option value="">Select your role</option>
+            {partyOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Sign Transaction */}
         <div className="mb-6">
-          <label className="block text-md font-bold text-gray-700 mb-2">Wallet Signature</label>
-          {!walletConnected && (
-            <div>
-              <input
-                type="text"
-                className="border p-2 rounded w-full mb-2"
-                value={walletAddress}
-                onChange={(e) => setWalletAddress(e.target.value)}
-                placeholder="Enter your wallet address (creator or accepter)"
-              />
+          <label className="block text-base font-medium text-gray-700 mb-2">
+            Sign Transaction to Approve Settlement
+          </label>
+
+          {walletConnected ? (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+              <p className="text-green-800 font-medium">
+                Transaction ready to submit
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
               <button
-                className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm w-full"
+                className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={connectWallet}
-                disabled={loading || !walletAddress}
+                disabled={loading || !selectedParty || !walletAddress || !claimedOutcome}
               >
-                Connect & Sign
+                {loading ? "Generating..." : "Generate Transaction to Sign"}
               </button>
+
               {qrCodeUrl && (
-                <div className="mt-4">
-                  <p className="text-sm text-gray-700 mb-2">
-                    Sign <code>SettleInDash:{walletAddress}</code> in Dash Core
+                <div className="mt-4 text-center">
+                  <p className="text-sm text-gray-700 mb-3">
+                    Sign this transaction hex in your wallet
                   </p>
-                  <img src={qrCodeUrl} alt="QR Code" className="w-64 h-64 mx-auto" />
+                  <img src={qrCodeUrl} alt="Sign QR Code" className="w-56 h-56 mx-auto border border-gray-300 rounded-lg" />
+
+
+                  {/* NEW: Full hex display + copy button */}
+                  <div className="mt-4 p-3 bg-gray-100 rounded-lg border border-gray-300 font-mono text-sm break-all">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-medium">Transaction hex to sign:</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(unsignedHex);
+                          alert("Transaction hex copied to clipboard!");
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-xs underline"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    {unsignedHex}
+                  </div>
+
+                  {/* NEW: Instruction box */}
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                    <p className="font-medium mb-2">How to sign without QR (e.g. Dash Core):</p>
+                    <ol className="list-decimal pl-5 space-y-1">
+                      <li>Copy the transaction hex above</li>
+                      <li>Open Dash Core → Tools → Debug console</li>
+                      <li>Type: <code className="bg-blue-100 px-1 rounded">signrawtransactionwithwallet "PASTE_HEX_HERE"</code></li>
+                      <li>Press Enter → copy the "hex" value from the output</li>
+                      <li>Paste it below</li>
+                    </ol>
+                  </div>
+
+
+
                   <input
                     type="text"
-                    className="border p-2 rounded w-full mt-2"
-                    value={manualSignature}
-                    onChange={(e) => setManualSignature(e.target.value)}
-                    placeholder="Paste signature here"
+                    className="w-full border border-gray-300 rounded-lg p-3 mt-4 font-mono text-sm"
+                    value={signedPartial}
+                    onChange={(e) => setSignedPartial(e.target.value)}
+                    placeholder="Paste signed transaction hex here (long string starting with 020000...)"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    The signed hex should start with '020000...' or similar.
+                  </p>
                   <button
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm w-full mt-2"
-                    onClick={verifyManualSignature}
-                    disabled={loading}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 mt-3 disabled:opacity-50"
+                    onClick={handleSubmit}
+                    disabled={loading || !signedPartial.trim()}
                   >
-                    Verify Signature
+                    {loading ? "Submitting..." : "Submit Settlement"}
                   </button>
                 </div>
               )}
             </div>
-          )}
-
-          {walletConnected && (
-            <p className="text-green-600 font-medium">
-              Wallet connected & verified: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-            </p>
           )}
         </div>
 
@@ -208,51 +280,55 @@ const SettleContractForm = ({
         <div className="flex gap-4">
           <button
             onClick={() => setSelectedContract(null)}
-            className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            className="flex-1 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition"
           >
             Cancel
           </button>
           <button
             onClick={() => setShowConfirmation(true)}
-            className="flex-1 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50"
-            disabled={!claimedOutcome || !walletConnected}
+            className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            disabled={!claimedOutcome || !walletConnected || !signedPartial.trim()}
           >
-            Submit Outcome
+            Submit Outcome & Settlement
           </button>
         </div>
       </div>
 
       {/* Confirmation Modal */}
       {showConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold mb-4">Confirm Submission</h3>
-            <div className="space-y-2 text-sm mb-6">
-              <p><strong>Claimed Outcome:</strong> {claimedOutcome}</p>
-              <p><strong>Reasoning:</strong> {reasoning || "None"}</p>
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900 mb-6">Confirm Settlement</h3>
+            <div className="space-y-4 text-gray-700 mb-8">
+              <p><strong>Outcome:</strong> {claimedOutcome}</p>
+              <p><strong>Reasoning:</strong> {reasoning || "None provided"}</p>
+              <p><strong>Role:</strong> {selectedParty === "creator" ? "Creator" : "Accepter"}</p>
+              <p className="text-sm text-gray-500">
+                Wallet: {walletAddress.slice(0, 8)}...{walletAddress.slice(-6)}
+              </p>
             </div>
-            <p className="text-sm text-red-600 mb-6">
-              This cannot be undone. Are you sure?
+            <p className="text-red-600 text-sm mb-8">
+              This will submit the settlement transaction. Are you sure?
             </p>
             <div className="flex gap-4">
               <button
                 onClick={() => setShowConfirmation(false)}
-                className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                className="flex-1 bg-gray-300 text-gray-800 py-3 rounded-xl hover:bg-gray-400 transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
-                className="flex-1 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                className="flex-1 bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition"
               >
-                Confirm & Submit
+                Confirm & Settle
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {error && <p className="text-red-500 mt-4 text-sm">{error}</p>}
+  
+      {error && <p className="text-red-600 mt-4 text-sm font-medium">{error}</p>}
     </div>
   );
 };

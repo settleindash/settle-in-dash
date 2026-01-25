@@ -120,15 +120,48 @@ if (count($outcomes) < 2) {
     exit;
 }
 
+
 // ─── Prompt ───
-$prompt = "You are an expert validator for prediction market events on SettleInDash and should write a describe that make it easy to settle what was the correct outcome when the event is finished.
 
-SUGGESTED TIME FORMAT – VERY IMPORTANT:
-- If you want to suggest a corrected start or finish time, return it **in the same timezone as the user input** (i.e. the timezone you received in event_start_timezone / expected_finish_timezone)
-- Return the time as a simple ISO-like string without Z, e.g. \"2026-01-20T21:00\" 
-- Also include the timezone name in the response so frontend knows it
-- Example: if user input was in Europe/Copenhagen, suggest \"2026-01-20T21:00\" in Europe/Copenhagen
+$prompt = "Respond **ONLY** with valid JSON. No markdown, no code blocks, no explanations, no extra text. The response must start with { and end with }. All strings must be properly escaped.\n\n.
+You are an expert validator for prediction market events on SettleInDash. You MUST create clear, neutral, Polymarket-style descriptions that are easy to objectively settle, using verifiable facts.
 
+CRITICAL FIRST STEP – AGGRESSIVE SOURCE SEARCH & CONSENSUS BUILDING – ALWAYS DO THIS FIRST:
+- Start by searching using the TITLE as primary query (outcomes and category).
+- Gather facts (date, time, venue, competition, status).
+- Use consensus to: fill gaps, correct minor errors (time offsets, venue), enhance description.
+- Note main confirming domains in reasoning (no full URLs).
+
+
+CRITICAL TIME CORRECTION RULES – FLEXIBLE CONSENSUS-BASED:
+- Compare user-provided local time against consensus from sources.
+- If user time matches consensus within ±15 min (accounting for timezone), return suggested_start_time = null.
+- If variance >15 min but strong consensus exists, suggest corrected time in user's input format/timezone.
+- For imminent/today events: rely heavily on aggregator/live preview sources; do NOT require sole official-site confirmation if multi-source agreement is clear.
+- If no time consensus → set suggested to null and note uncertainty in timezone_note.
+
+
+IMPROVED DESCRIPTION GUIDELINES – ADAPT TO CATEGORY \"$category\":
+- Use searched facts/sources to enhance detials.
+- Write in neutral, factual third-person language.
+- Always include: event details (date, local time, location), precise resolution criteria (from sources), primary sources (domains/URLs), tie-breakers, edge cases.
+- Keep concise (100–250 words), structured, verifiable.
+- Tailor to category:
+  - Politics/Elections: Polling close time, counting rules, certification date.
+  - Weather: Measurement location/method, metric, time window.
+  - Commodities/Stocks: Price metric, exchange, timestamp.
+  - Sports: Competition/stage, venue, rules (regular time? overtime?).
+  - Crypto: Asset/exchange, metric, timestamp (UTC).
+  - Other: Adapt (e.g., awards: announcement time, academy site).
+- If user description is good, enhance with facts/sources without changing meaning.
+- Use BEST PRACTICES FOR RULES and RESOLUTION CRITERIA
+
+CRITICAL TIME CORRECTION RULES – MUST FOLLOW:
+- Always verify user's local time against searched sources/schedules.
+- MUST suggest correct local time in user's timezone.
+- Do NOT accept errors — correct using official data.
+- Return suggested time as null if user's time is correct.
+- When suggesting, return in SAME format/timezone as user input (e.g., \"2026-01-20T21:00\") and include timezone name.
 
 User's browser timezone: $user_timezone
 
@@ -137,29 +170,31 @@ Event details:
 - Category: \"$category\"
 - Start (local): \"$event_start_local\" ({$event_start_timezone})
 - Expected Finish (local): " . ($expected_finish_local ? "\"$expected_finish_local\" ({$expected_finish_timezone})" : "Not specified") . "
-- Outcomes: " . implode(", ", $outcomes) . "
-- Description: \"$description\"
+- Possible Outcomes: " . implode(", ", $outcomes) . "
+- User Description: \"$description\"
 
 Task:
-1. Validate using the local times above
-2. Check clarity, resolvability, verifiability
-3. Suggest corrections in UTC ISO if needed
-4. Improve description
+1. Gather/verify facts for the event searching the internet
+2. Validate and correct times if needed
+3. Check clarity, resolvability, verifiability
+4. Create improved description optimized for easy settlement
 
-Respond ONLY with JSON:
+Respond ONLY with valid JSON:
 {
   \"is_valid\": boolean,
-  \"reasoning\": \"short text – mention local time\",
-  \"improved_description\": \"string\",
-  \"suggested_start_time\": \"YYYY-MM-DDTHH:mm\" or null,
-  \"suggested_start_timezone\": \"Europe/Copenhagen\" or null,
-  \"suggested_finish_time\": \"YYYY-MM-DDTHH:mm\" or null,
-  \"suggested_finish_timezone\": \"Europe/Copenhagen\" or null,
-  \"timezone_note\": \"string or null\
-}";
+  \"reasoning\": \"short explanation – always reference local time and resolvability\",
+  \"improved_description\": \"neutral, precise, Polymarket-style market description\",
+  \"suggested_start_time\": \"YYYY-MM-DDTHH:mm (local time string in the user's timezone) or null\",
+  \"suggested_start_timezone\": \"IANA timezone name matching user's input (e.g. Europe/Paris, America/Chicago, Asia/Tokyo) or null\",
+  \"suggested_finish_time\": \"YYYY-MM-DDTHH:mm (local time string) or null\",
+  \"suggested_finish_timezone\": \"same IANA timezone as user input or null\",
+  \"timezone_note\": \"string or null\"
+}
+
+Be practical for real-world prediction markets: prioritize strong multi-source consensus over perfect official-site coverage. Strict on ambiguity/resolution clarity, flexible on schedule verification when sources align.";
 
 $payload = [
-    "model" => "grok-3",
+    "model" => "grok-4-1-fast-reasoning",
     "messages" => [["role" => "user", "content" => $prompt]],
     "max_tokens" => 600,
     "temperature" => 0.3
@@ -182,19 +217,42 @@ $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
 if ($httpCode !== 200 || !$response) {
+    debug_log("Grok API call failed - HTTP $httpCode");
     http_response_code(502);
     echo json_encode(["error" => "Grok API error"]);
     exit;
 }
 
 $data = json_decode($response, true);
+
+if (!isset($data['choices'][0]['message']['content'])) {
+    debug_log("No content in Grok response - full: " . json_encode($data));
+    http_response_code(502);
+    echo json_encode(["error" => "Invalid Grok response structure"]);
+    exit;
+}
+
 $content = trim($data['choices'][0]['message']['content'] ?? '');
+
+// ─── CRITICAL DEBUGGING ───
+debug_log("Raw Grok output (first 1500 chars): " . substr($content, 0, 1500));
 
 try {
     $result = json_decode($content, true);
-    if (!is_array($result) || !isset($result['is_valid'])) {
-        throw new Exception("Invalid response");
+
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        debug_log("JSON decode FAILED: " . json_last_error_msg() . " | Raw: " . substr($content, 0, 1000));
+        throw new Exception("Invalid JSON from Grok");
     }
+
+    if (!is_array($result) || !isset($result['is_valid'])) {
+        debug_log("Missing required fields in response");
+        throw new Exception("Missing required fields");
+    }
+
+    // Now log the successful parsed result
+    debug_log("Grok full parsed response: " . json_encode($result, JSON_PRETTY_PRINT));
+
     $result['improved_description'] ??= $description;
     $result['suggested_start_time'] ??= null;
     $result['suggested_finish_time'] ??= null;
@@ -202,6 +260,8 @@ try {
 
     echo json_encode($result);
 } catch (Exception $e) {
+    debug_log("Grok parse error: " . $e->getMessage());
     http_response_code(502);
-    echo json_encode(["error" => "Invalid Grok format"]);
+    echo json_encode(["error" => "Invalid Grok format", "details" => $e->getMessage()]);
+    exit;
 }
