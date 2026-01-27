@@ -39,7 +39,7 @@ $action = $input['action'] ?? '';
 // Whitelist actions
 $allowedActions = [
     'verify_signature', 'create_multisig', 'validate_transaction',
-    'create_contract', 'accept_contract', 'get_balance', 'get_contracts', 'listunspent','settle_contract','generate_unsigned_settlement_tx'
+    'create_contract', 'accept_contract', 'get_balance', 'get_contracts', 'listunspent','settle_contract','generate_unsigned_settlement_tx','generate_settlement_signing_data'
 ];
 if (!in_array($action, $allowedActions)) {
     http_response_code(400);

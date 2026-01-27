@@ -1,5 +1,5 @@
 // src/hooks/useContracts.js
-// FINAL ULTIMATE VERSION — 100% COMPLETE, CLEAN, PROFESSIONAL
+// FINAL ULTIMATE VERSION — Updated for generate_settlement_signing_data + message signature
 
 import { useState, useMemo, useCallback } from "react";
 
@@ -63,55 +63,63 @@ export const useContracts = () => {
   );
 
   // 3. acceptContract
-const acceptContract = useCallback(
-  async (contractId, payload) => {
-    const result = await post("accept_contract", {
-      contract_id: contractId,
-      ...payload
-    });
-
-    if (result.success) {
-      setContracts((prev) =>
-        prev.map((c) =>
-          c.contract_id === contractId ? { ...c, ...result.data } : c
-        )
-      );
-    }
-    return result;
-  },
-  [post]
-);
-
-// 4. settleContract — updated to accept partial_tx_hex
-const settleContract = useCallback(
-  async (contractId, resolution, reasoning, signerAddress, signature, message, partialTxHex = '') => {
-    try {
-      if (!partialTxHex) {
-        console.warn("DEBUG: No partial_tx_hex provided — only vote will be saved, no settlement");
-      }
-
-      const payload = {
+  const acceptContract = useCallback(
+    async (contractId, payload) => {
+      const result = await post("accept_contract", {
         contract_id: contractId,
-        resolution,
-        reasoning,
-        signer_address: signerAddress,
-        signature,
-        message,
-        partial_tx_hex: partialTxHex,
-      };
+        ...payload
+      });
 
-      console.log("DEBUG: settleContract sending:", payload);
-
-      const result = await post("settle_contract", payload);
+      if (result.success) {
+        setContracts((prev) =>
+          prev.map((c) =>
+            c.contract_id === contractId ? { ...c, ...result.data } : c
+          )
+        );
+      }
       return result;
-    } catch (err) {
-      const msg = err.message || "Network error during settlement";
-      setError(msg);
-      throw err;
-    }
-  },
-  [post]
-);
+    },
+    [post]
+  );
+
+  // 4. settleContract — sends message signature + tx partial hex
+  const settleContract = useCallback(
+    async (
+      contractId,
+      resolution,
+      reasoning,
+      signerAddress,
+      partialTxHex,
+      messageSignature,           // ← from signmessage
+      message                     // ← e.g. "SettleInDASH settlement:contract_id:resolution"
+    ) => {
+      try {
+        if (!partialTxHex) {
+          console.warn("DEBUG: No partial_tx_hex provided — only vote will be saved");
+        }
+
+        const payload = {
+          contract_id: contractId,
+          resolution,
+          reasoning,
+          signer_address: signerAddress,
+          signature: messageSignature,   // message signature (from signmessage)
+          message,                       // the exact message that was signed
+          partial_tx_hex: partialTxHex,
+        };
+
+        console.log("DEBUG: settleContract sending:", payload);
+
+        const result = await post("settle_contract", payload);
+        return result;
+      } catch (err) {
+        const msg = err.message || "Network error during settlement";
+        setError(msg);
+        throw err;
+      }
+    },
+    [post]
+  );
 
   // 5. validateTransaction
   const validateTransaction = useCallback(
@@ -126,7 +134,7 @@ const settleContract = useCallback(
     [post]
   );
 
-    // 6. getTransactionInfo
+  // 6. getTransactionInfo
   const getTransactionInfo = useCallback(
     async (txid) => {
       if (!txid) return null;
@@ -141,58 +149,57 @@ const settleContract = useCallback(
     [post]
   );
 
-   // 7.  verifySignature 
-const verifySignature = useCallback(
-  async (address, signature) => {
-    const message = `SettleInDash:${address}`;
+  // 7. verifySignature
+  const verifySignature = useCallback(
+    async (address, signature) => {
+      const message = `SettleInDash:${address}`;
 
-    try {
-      const response = await fetch(API_BASE, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "verify_signature",
-          data: { address, message, signature }
-        })
-      });
+      try {
+        const response = await fetch(API_BASE, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "verify_signature",
+            data: { address, message, signature }
+          })
+        });
 
-      const result = await response.json();
+        const result = await response.json();
 
-      if (!response.ok) {
+        if (!response.ok) {
+          return false;
+        }
+
+        return result.isValid === true;
+      } catch (err) {
         return false;
       }
+    },
+    []
+  );
 
-      return result.isValid === true;   // ← MUST RETURN BOOLEAN
-    } catch (err) {
-      return false;
-    }
-  },
-  []
-);
-
-
-// 8. generateUnsignedSettlementTx — gets unsigned raw tx hex from backend
-const generateUnsignedSettlementTx = useCallback(
-  async (contractId, resolution) => {
-    try {
-      const result = await post("generate_unsigned_settlement_tx", {
-        contract_id: contractId,
-        resolution,
-      });
-      if (!result.success) {
-        throw new Error(result.error || "Failed to generate unsigned tx");
+  // 8. generateSettlementSigningData — renamed + returns prevtxs etc.
+  const generateSettlementSigningData = useCallback(
+    async (contractId, resolution) => {
+      try {
+        const result = await post("generate_settlement_signing_data", {
+          contract_id: contractId,
+          resolution,
+        });
+        if (!result.success) {
+          throw new Error(result.error || "Failed to generate signing data");
+        }
+        return result;
+      } catch (err) {
+        const msg = err.message || "Network error generating signing data";
+        setError(msg);
+        throw err;
       }
-      return result;
-    } catch (err) {
-      const msg = err.message || "Network error generating tx";
-      setError(msg);
-      throw err;
-    }
-  },
-  [post]
-);
+    },
+    [post]
+  );
 
-  // 9. listUnspent (for double-spend protection)
+  // 9. listUnspent
   const listUnspent = useCallback(
     async (address, minconf = 0) => {
       return await post("listunspent", { address, minconf });
@@ -212,7 +219,6 @@ const generateUnsignedSettlementTx = useCallback(
     };
     return map[status] || status;
   }, []);
-
 
   const accepterStake = useCallback((contract) => {
     if (!contract?.stake || !contract?.odds) return "0.00";
@@ -243,7 +249,7 @@ const generateUnsignedSettlementTx = useCallback(
       createContract,
       acceptContract,
       settleContract,
-      generateUnsignedSettlementTx, 
+      generateSettlementSigningData,      // ← updated name
       validateTransaction,
       listUnspent,
       getTransactionInfo,
@@ -266,7 +272,7 @@ const generateUnsignedSettlementTx = useCallback(
       createContract,
       acceptContract,
       settleContract,
-      generateUnsignedSettlementTx, 
+      generateSettlementSigningData,
       validateTransaction,
       listUnspent,
       getTransactionInfo,
