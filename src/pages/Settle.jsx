@@ -10,6 +10,15 @@ import PageHeader from "../utils/formats/PageHeader.jsx";
 import SettleContractForm from "../components/SettleContractForm.jsx";
 import debounce from "lodash/debounce";
 
+
+//useEffect(() => {
+//  // Auto-search if input is pre-filled on page load
+//  if (searchValue && validateSearchInput(searchValue) && !selectedContract) {
+//    searchForContract(searchValue);
+//  }
+//}, []); // runs once on mount
+
+
 const Settle = () => {
   const { contracts, fetchContracts, settleContract, loading } = useContracts();
   const { events, getEvents, parseOutcomes } = useEvents();
@@ -17,17 +26,38 @@ const Settle = () => {
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedContract, setSelectedContract] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+
+   const [hasAutoSearched, setHasAutoSearched] = useState(false);
 
   const validDashAddress = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{25,35}$/;
 
   const debouncedSetSearch = useMemo(() => debounce(setDebouncedSearch, 400), []);
 
+const refreshContract = async () => {
+  if (!selectedContract?.contract_id) return;
+  setRefreshing(true);
+  try {
+    const updated = await fetchContracts({ contract_id: selectedContract.contract_id });
+    if (updated.length > 0) {
+      setSelectedContract(updated[0]);
+    }
+  } catch (err) {
+    console.error("Refresh failed:", err);
+    setError("Failed to refresh — please reload the page.");
+  } finally {
+    setRefreshing(false);
+  }
+};
+
   useEffect(() => {
     fetchContracts({ status: null });
     getEvents({ status: null });
   }, [fetchContracts, getEvents]);
+
+
 
   useEffect(() => {
     if (debouncedSearch && validateSearchInput(debouncedSearch)) {
@@ -38,6 +68,24 @@ const Settle = () => {
       setError("");
     }
   }, [debouncedSearch]);
+
+
+  useEffect(() => {
+    if (
+      contracts.length > 0 &&           // data arrived
+      searchValue &&                    // input is pre-filled
+      validateSearchInput(searchValue) &&
+      !selectedContract &&              // nothing selected yet
+      !hasAutoSearched                  // only once
+    ) {
+      setHasAutoSearched(true);
+      setIsSearching(true);
+      searchForContract(searchValue)
+        .finally(() => setIsSearching(false));
+    }
+  }, [contracts, searchValue, selectedContract, hasAutoSearched]);
+
+
 
   const validateSearchInput = (value) => validDashAddress.test(value);
 
@@ -161,7 +209,7 @@ const Settle = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium">Oracle vote:</span>
-                    <span>{selectedContract.grok_winner_choice || "Pending"}</span>
+                    <span>{selectedContract.grok_winner_choice || "—"}</span>
                   </div>
 
                   <div className="pt-4 border-t border-gray-200">
@@ -225,11 +273,20 @@ const Settle = () => {
                     filteredContracts={[selectedContract]}
                     settleContract={settleContract}
                     setSelectedContract={setSelectedContract}
+                    onSuccess={refreshContract}
                     setError={setError}
                     error={error}
                   />
                 </div>
               )}
+
+            {/* ← ADD HERE: shows during ANY refresh when contract is selected */}
+            {refreshing && (
+              <p className="text-center text-blue-600 mt-4 animate-pulse">
+                Refreshing contract status...
+              </p>
+            )}
+
             </div>
           </div>
         )}

@@ -210,7 +210,7 @@ const ContractCard = ({
     setSubmitError("");
 
     try {
-      // Generate NEW 3-of-3 multisig
+      // Generate NEW 2-of-3 multisig
       const multisigResponse = await fetch("https://settleindash.com/api/contracts.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -222,7 +222,7 @@ const ContractCard = ({
               accepterPublicKey,
               ORACLE_PUBLIC_KEY,
             ],
-            required_signatures: 3,
+            required_signatures: 2,
             network: NETWORK
           }
         })

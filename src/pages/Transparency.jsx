@@ -12,7 +12,7 @@ const Transparency = () => {
   useEffect(() => {
     console.log("Transparency: Fetching contracts");
     fetchContracts({ 
-      status: ["open", "accepted", "settled", "expired", "twist"]
+      status: ["open", "accepted", "settled", "expired", "cancelled"]
     });
   }, [fetchContracts]);
 
@@ -25,9 +25,9 @@ const Transparency = () => {
       eventCategory: contract.event_category || "",
       eventDate: contract.event_date || null,
       eventPossibleOutcomes: contract.event_possible_outcomes || null,
-      eventResolution: contract.event_resolution || null,
       eventWinningOutcome: contract.event_winning_outcome || null,
       eventStatus: contract.event_status || null,
+      displayResolution: contract.settled_outcome || contract.event_winning_outcome || "Pending"
     }));
   }, [contracts]);
 
@@ -53,13 +53,7 @@ const Transparency = () => {
                     Event
                   </th>
                   <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[80px]">
-                    Outcome
-                  </th>
-                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[80px]">
-                    Winner
-                  </th>
-                  <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[100px]">
-                    Resolution
+                    Settled At
                   </th>
                   <th className="p-1 sm:p-4 text-left text-gray-700 text-[10px] sm:text-xs max-w-[100px]">
                     Created At
@@ -81,14 +75,8 @@ const Transparency = () => {
                     <td className="p-1 sm:p-4 max-w-[120px] truncate break-words text-[10px] sm:text-xs">
                       {contract.eventTitle || "Not set"}
                     </td>
-                    <td className="p-1 sm:p-4 max-w-[80px] truncate break-words text-[10px] sm:text-xs">
-                      {contract.outcome || "Not set"}
-                    </td>
-                    <td className="p-1 sm:p-4 max-w-[80px] truncate break-words text-[10px] sm:text-xs">
-                      {contract.winner || "Not set"}
-                    </td>
                     <td className="p-1 sm:p-4 max-w-[100px] truncate break-words text-[10px] sm:text-xs">
-                      {contract.eventResolution || "—"}
+                      {contract.displayResolution || "—"}
                     </td>
                     <td className="p-1 sm:p-4 max-w-[100px] truncate break-words text-[10px] sm:text-xs">
                       {contract.created_at ? new Date(contract.created_at).toLocaleString() : "Not set"}

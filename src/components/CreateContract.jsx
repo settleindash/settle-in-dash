@@ -4,7 +4,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useConstants } from "../hooks/useConstants.js";
 import { useContracts } from "../hooks/useContracts.js";
 import { useEvents } from "../hooks/useEvents.js";
-import { validateContractCreation, parseOutcomes } from "../utils/validation";
+import { validateContractCreation } from "../utils/validation";
 import { formatCustomDate, getLocalDateString } from "../utils/validation";
 import TermsSummary from "./TermsSummary";
 import PageHeader from "../utils/formats/PageHeader.jsx";
@@ -25,7 +25,7 @@ const CreateContract = () => {
   const [eventLoading, setEventLoading] = useState(true);
   const [eventError, setEventError] = useState("");
 
-  const [outcome, setOutcome] = useState("");
+  const [outcome, setOutcome] = useState(""); // Only "Yes" or "No"
   const [positionType, setPositionType] = useState("sell");
   const [stake, setStake] = useState("");
   const [odds, setOdds] = useState("");
@@ -37,7 +37,6 @@ const CreateContract = () => {
   const [submitError, setSubmitError] = useState("");
   const [walletConnected, setWalletConnected] = useState(false);
   const [message, setMessage] = useState("");
-  const [multisigAddress, setMultisigAddress] = useState("");
   const [signature, setSignature] = useState("");
   const [manualSignature, setManualSignature] = useState("");
   const [transactionId, setTransactionId] = useState("");
@@ -45,16 +44,13 @@ const CreateContract = () => {
   const [stakeQrCodeUrl, setStakeQrCodeUrl] = useState(null);
   const [stakeTxValidated, setStakeTxValidated] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [currentMultisig, setCurrentMultisig] = useState(""); // Temporary for current flow
 
 
-console.log(Intl.DateTimeFormat().resolvedOptions().timeZone);  // What timezone is your browser using?
-console.log(new Date("2026-01-20T20:00:00Z").toLocaleString());  // Should show 21:00 in CET
+  // 1. FETCH CONSTANTS
+  // (handled in useConstants.js)
 
-
-  // 1. FETCH CONSTANTS — INDEPENDENT
-  // (already handled inside useConstants.js)
-
-  // 2. FETCH EVENT — SEPARATE EFFECT
+  // 2. FETCH EVENT
   useEffect(() => {
     const fetchEvent = async () => {
       setEventLoading(true);
@@ -74,9 +70,11 @@ console.log(new Date("2026-01-20T20:00:00Z").toLocaleString());  // Should show 
         setEventId(event.event_id);
         setSelectedEvent(event);
 
+        // Pre-select outcome from URL if present (still only Yes/No allowed)
         const outcomeFromUrl = new URLSearchParams(location.search).get("outcome");
-        if (outcomeFromUrl && parseOutcomes(event.possible_outcomes).includes(decodeURIComponent(outcomeFromUrl))) {
-          setOutcome(decodeURIComponent(outcomeFromUrl));
+        const decoded = decodeURIComponent(outcomeFromUrl || "");
+        if (["Yes", "No"].includes(decoded)) {
+          setOutcome(decoded);
         }
       } catch (err) {
         setEventError(err.message);
@@ -88,7 +86,7 @@ console.log(new Date("2026-01-20T20:00:00Z").toLocaleString());  // Should show 
     fetchEvent();
   }, [getEvent, location.search]);
 
-  // EARLY RETURN — AFTER ALL HOOKS
+  // EARLY RETURN
   if (constantsLoading || eventLoading) {
     return (
       <div className="min-h-screen bg-background p-8 flex items-center justify-center">
@@ -188,7 +186,7 @@ console.log(new Date("2026-01-20T20:00:00Z").toLocaleString());  // Should show 
   };
 
   // -----------------------------------------------------------------
-  // Generate QR codes (multisig + stake)
+  // Generate QR codes (fresh multisig + stake)
   // -----------------------------------------------------------------
   const generateTransactionQRCodes = async () => {
     if (!walletConnected || !signature) return setError("Please connect and sign first");
@@ -197,8 +195,9 @@ console.log(new Date("2026-01-20T20:00:00Z").toLocaleString());  // Should show 
 
     try {
       setLoading(true);
+      setMessage("Creating fresh multisig...");
 
-      // 1. Create multisig
+      // ALWAYS fetch a brand new multisig
       const multisigResponse = await fetch("https://settleindash.com/api/contracts.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -211,22 +210,32 @@ console.log(new Date("2026-01-20T20:00:00Z").toLocaleString());  // Should show 
           },
         }),
       });
-      if (!multisigResponse.ok) throw new Error(`HTTP ${multisigResponse.status}`);
+
+      if (!multisigResponse.ok) {
+        const errText = await multisigResponse.text();
+        throw new Error(`Multisig creation failed: ${multisigResponse.status} - ${errText}`);
+      }
+
       const multisigResult = await multisigResponse.json();
-      if (!multisigResult.success) throw new Error(multisigResult.error || "Failed to create multisig");
+      if (!multisigResult.success) {
+        throw new Error(multisigResult.error || "Failed to create multisig");
+      }
 
-      setMultisigAddress(multisigResult.multisig_address);
+      const freshMultisig = multisigResult.multisig_address;
+      setCurrentMultisig(freshMultisig); // temporary for submit
 
-      // 2. Stake QR
+      // 2. Stake QR with fresh address
       const amount = Number(stake).toFixed(8);
-      const stakeQr = await QRCode.toDataURL(`dash:${multisigResult.multisig_address}?amount=${amount}`);
+      const stakeQr = await QRCode.toDataURL(`dash:${freshMultisig}?amount=${amount}`);
+
       setStakeQrCodeUrl(stakeQr);
       setMessage(
-        `Scan the QR code to send ${amount} DASH to the multisig address ${multisigResult.multisig_address}. Then enter the transaction ID.`
+        `Send ${amount} DASH to this fresh multisig address:\n${freshMultisig}\n\n` +
+        `Then enter the transaction ID below.`
       );
     } catch (err) {
-      setError("Failed to generate transaction QR code: " + err.message);
-      console.error("CreateContract: QR code generation error:", err);
+      setError("Failed to create multisig or QR code: " + err.message);
+      console.error("QR generation error:", err);
     } finally {
       setLoading(false);
     }
@@ -235,14 +244,13 @@ console.log(new Date("2026-01-20T20:00:00Z").toLocaleString());  // Should show 
   // -----------------------------------------------------------------
   // Transaction validation
   // -----------------------------------------------------------------
-
- const validateTransaction = async (txid, expectedDestination, expectedAmount, type) => {
+  const validateTransaction = async (txid, expectedDestination, expectedAmount, type) => {
     if (!/^[0-9a-fA-F]{64}$/.test(txid)) {
       setValidationError("Invalid transaction ID format (64 hex characters required).");
       return false;
     }
 
-    setValidationError(""); // Clear previous
+    setValidationError("");
     const maxAttempts = 12;
     const delayMs = 10000;
 
@@ -316,7 +324,7 @@ console.log(new Date("2026-01-20T20:00:00Z").toLocaleString());  // Should show 
     return false;
   };
 
-const handleValidateTransactions = async () => {
+  const handleValidateTransactions = async () => {
     if (!transactionId) {
       setValidationError("Please enter the stake transaction ID");
       return;
@@ -328,10 +336,10 @@ const handleValidateTransactions = async () => {
       return;
     }
 
-    setValidationError(""); // Clear
+    setValidationError("");
     setMessage("Starting validation...");
 
-    const ok = await validateTransaction(transactionId, multisigAddress, amount, "stake");
+    const ok = await validateTransaction(transactionId, currentMultisig, amount, "stake");
 
     if (ok) {
       setStakeTxValidated(true);
@@ -344,14 +352,22 @@ const handleValidateTransactions = async () => {
   // -----------------------------------------------------------------
   // Form submission
   // -----------------------------------------------------------------
- const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!walletConnected || !signature) return setError("Please connect and sign first");
     if (!stakeTxValidated) return setError("Please validate the stake transaction");
+    if (!currentMultisig) return setError("Please generate multisig and stake QR first");
 
     setLoading(true);
     setError("");
     setSubmitError("");
+
+    // Enforce Yes/No
+    if (!["Yes", "No"].includes(outcome)) {
+      setError("Outcome must be Yes or No");
+      setLoading(false);
+      return;
+    }
 
     const validationResult = await validateContractCreation(
       {
@@ -384,7 +400,7 @@ const handleValidateTransactions = async () => {
         stake: Number(stake),
         odds: Number(odds),
         acceptance_deadline: new Date(acceptanceDeadline).toISOString(),
-        multisig_address: multisigAddress,
+        multisig_address: currentMultisig, // fresh one from this flow
         refund_transaction_id: "",
         creator_public_key: creatorPublicKey,
         transaction_id: transactionId,
@@ -419,7 +435,6 @@ const handleValidateTransactions = async () => {
       setLoading(false);
     }
   };
-
 
   // -----------------------------------------------------------------
   // Render
@@ -513,10 +528,10 @@ const handleValidateTransactions = async () => {
               </p>
             </div>
 
-            {/* Outcome */}
+            {/* Outcome — restricted to Yes / No */}
             <div className="mb-6">
               <label htmlFor="outcome" className="block text-lg font-bold text-primary mb-2">
-                Outcome
+                Outcome (Yes or No only)
               </label>
               <select
                 id="outcome"
@@ -526,13 +541,13 @@ const handleValidateTransactions = async () => {
                 disabled={loading}
                 aria-label="Contract outcome"
               >
-                <option value="">Select an outcome</option>
-                {parseOutcomes(selectedEvent.possible_outcomes).map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
+                <option value="">Select Yes or No</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
               </select>
+              <p className="text-gray-600 text-xs mt-1">
+                This contract only supports Yes/No outcomes.
+              </p>
             </div>
 
             {/* Position Type (Sell only) */}
@@ -681,13 +696,13 @@ const handleValidateTransactions = async () => {
                 <div className="mt-4">
                   <div className="mb-4">
                     <p className="text-gray-700 text-sm mb-2">
-                      Stake Transfer: Send {Number(stake).toFixed(8)} DASH to multisig address {multisigAddress}
+                      Stake Transfer: Send {Number(stake).toFixed(8)} DASH to fresh multisig address {currentMultisig}
                     </p>
                     <p className="text-gray-600 text-xs mb-2">
                       Note: A small network fee (0.001 DASH) may be deducted from your stake if the contract is refunded or settled.
                     </p>
                     <img src={stakeQrCodeUrl} alt="Stake QR Code" className="w-64 h-64 mx-auto" />
-                    <p className="text-gray-600 text-xs mt-1">Multisig Address: {multisigAddress}</p>
+                    <p className="text-gray-600 text-xs mt-1">Multisig Address: {currentMultisig}</p>
                   </div>
 
                   <div className="mt-4">
@@ -713,7 +728,6 @@ const handleValidateTransactions = async () => {
                       Validate Transaction
                     </button>
 
-                    {/* ERROR UNDER VALIDATE BUTTON */}
                     {validationError && (
                       <p className="text-red-500 text-sm mt-3 text-center font-medium">
                         {validationError}
@@ -730,17 +744,16 @@ const handleValidateTransactions = async () => {
               )}
             </div>
 
-            {/* Submit Button + ERROR UNDER ACCEPT BUTTON */}
+            {/* Submit Button */}
             <div className="mt-8">
               <button
                 type="submit"
                 className="w-full bg-orange-500 text-white py-3 rounded hover:bg-orange-600 disabled:opacity-50 text-lg font-bold"
-                disabled={contractLoading || !walletConnected || !signature || !stakeTxValidated || loading}
+                disabled={contractLoading || !walletConnected || !signature || !stakeTxValidated || loading || !currentMultisig}
               >
                 {loading || contractLoading ? "Accepting..." : "Accept Contract"}
               </button>
 
-              {/* ERROR RIGHT UNDER THE BUTTON */}
               {submitError && (
                 <p className="text-red-500 text-sm mt-3 text-center font-medium">
                   {submitError}

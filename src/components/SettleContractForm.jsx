@@ -9,6 +9,7 @@ const SettleContractForm = ({
   filteredContracts,
   settleContract,
   setSelectedContract,
+  onSuccess,
   setError,
   error,
 }) => {
@@ -132,51 +133,58 @@ const SettleContractForm = ({
     }
   };
 
-  const handleSubmit = async () => {
-    if (!signedPartial.trim()) {
-      setError("Please paste the signed transaction hex first");
-      return;
-    }
-    if (!messageSignature.trim()) {
-      setError("Please paste the message signature first (from signmessage)");
-      return;
-    }
+const handleSubmit = async () => {
+  if (!signedPartial.trim()) {
+    setError("Please paste the signed transaction hex first");
+    return;
+  }
+  if (!messageSignature.trim()) {
+    setError("Please paste the message signature first");
+    return;
+  }
 
-    setLoading(true);
-    setError("");
-    setStatusMessage("Submitting your vote & signature...");
+  setLoading(true);
+  setError("");
+  setStatusMessage("Submitting your vote & signature...");
 
-    try {
-      const messageToSign = `SettleInDASH settlement:${selectedContractId}:${claimedOutcome}`;
+  try {
+    const messageToSign = `SettleInDASH settlement:${selectedContractId}:${claimedOutcome}`;
 
-      const result = await settleContract(
-        selectedContractId,
-        claimedOutcome,
-        reasoning,
-        walletAddress,
-        signedPartial,
-        messageSignature,
-        messageToSign  // ← send the exact message used for signing
-      );
+    const result = await settleContract(
+      selectedContractId,
+      claimedOutcome,
+      reasoning,
+      walletAddress,
+      signedPartial,
+      messageSignature,
+      messageToSign
+    );
 
-      if (result.success) {
-        setStatusMessage("Success! Your vote and signature were submitted. The contract will settle automatically when another party agrees.");
+    if (result.success) {
+      setStatusMessage("Success! Your submission was accepted. Refreshing contract status...");
+      
+      // NEW: Trigger refresh in parent
+      if (onSuccess) {
+        onSuccess();
+      }
+
+      // Optional: close form after short delay (gives user time to read message)
+      setTimeout(() => {
         setSelectedContract(null);
-      } else {
-        setError(result.error || "Submission failed");
-      }
-    } catch (err) {
-      let msg = err.message || "Unknown error";
-      if (err.message.includes("502")) {
-        msg = "Server timeout — likely during settlement. Check contract status in a minute.";
-      } else if (msg.includes("Invalid signature")) {
-        msg = "Signature mismatch — make sure you signed the exact message shown in instructions.";
-      }
-      setError("Error submitting: " + msg);
-    } finally {
-      setLoading(false);
+      }, 3000);
+    } else {
+      setError(result.error || "Submission failed");
     }
-  };
+  } catch (err) {
+    let msg = err.message || "Unknown error";
+    if (err.message?.includes("502")) {
+      msg = "Server timeout — settlement may still be processing. Check status in a minute.";
+    }
+    setError("Error: " + msg);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">

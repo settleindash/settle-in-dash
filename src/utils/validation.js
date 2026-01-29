@@ -144,37 +144,66 @@ export const validateContractCreation = async (data, selectedEvent) => {
     errors.push("Invalid odds: must be greater than 1");
   }
 
-if (data.expiration_date && selectedEvent) {
-  try {
-    const expiration = new Date(data.expiration_date);
-    const eventDate = new Date(selectedEvent.event_date);
-    const now = new Date();
+ // ────────────────────────────────────────────────────────────────
+  // Fixed date validation – handles UTC vs local correctly
+  // ────────────────────────────────────────────────────────────────
+  if (data.expiration_date && selectedEvent) {
+    try {
+      // 1. Event date from database → explicitly treat as UTC
+      let eventStr = selectedEvent.event_date.trim().replace(/\s+/g, 'T');
+      if (!eventStr.includes('Z')) eventStr += 'Z';
+      const eventDateUTC = new Date(eventStr);
 
-    if (isNaN(expiration.getTime()) || isNaN(eventDate.getTime())) {
-      errors.push("Invalid date format for expiration or event date");
-    } else {
-      // Must be in the future
-      if (expiration <= now) {
-        errors.push("Expiration date must be in the future");
-      }
+      // 2. Expiration from <input type="datetime-local"> → local time
+      let expStr = data.expiration_date.trim();
+      // Add :00 seconds if user didn't select them (very common)
+      if (expStr.length === 16) expStr += ':00';
+      const expirationLocal = new Date(expStr);
 
-      // Allow equality: deadline can be exactly at event time
-      // (most user-friendly for betting contracts)
-      if (expiration > eventDate) {
-        // Show the event time in the user's local timezone for clarity
-        const eventLocal = eventDate.toLocaleString(undefined, {
-          dateStyle: 'medium',
-          timeStyle: 'short'
-        });
-        errors.push(
-          `Expiration date must be before or on the event time (${eventLocal}) in your local timezone`
-        );
+      const now = new Date();
+
+       // ── ADD THESE LOGS ─────────────────────────────────────────────
+    console.log("=== DATE VALIDATION DEBUG ===");
+    console.log("Event raw (DB)             :", selectedEvent.event_date);
+    console.log("Event UTC ISO              :", eventDateUTC.toISOString());
+    console.log("Event local display        :", eventDateUTC.toLocaleString(undefined, {dateStyle:"medium", timeStyle:"short"}));
+    console.log("Expiration raw (input)     :", data.expiration_date);
+    console.log("Expiration local ISO       :", expirationLocal.toISOString());           // ← this should be ~19:00Z if you picked 20:00 CET
+    console.log("Expiration local string    :", expirationLocal.toLocaleString());
+    console.log("Now (local)                :", now.toLocaleString());
+    console.log("expirationLocal.getTime()  :", expirationLocal.getTime());
+    console.log("eventDateUTC.getTime()     :", eventDateUTC.getTime());
+    console.log("Difference (exp - event) ms:", expirationLocal.getTime() - eventDateUTC.getTime());
+    console.log("Should allow?              :", expirationLocal.getTime() <= eventDateUTC.getTime() ? "YES" : "NO");
+    console.log("=== END DEBUG ===");
+    // ────────────────────────────────────────────────────────────────
+
+  
+
+      if (isNaN(eventDateUTC.getTime()) || isNaN(expirationLocal.getTime())) {
+        errors.push("Invalid date format for expiration or event date");
+      } else {
+        // Must be in the future (compared in local time for user intuition)
+        if (expirationLocal <= now) {
+          errors.push("Expiration date must be in the future");
+        }
+
+        // Core fix: compare UTC timestamps (same moment in time)
+        if (expirationLocal.getTime() > eventDateUTC.getTime()) {
+          // Show correct event time in user's local timezone
+          const eventLocal = eventDateUTC.toLocaleString(undefined, {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          });
+          errors.push(
+            `Expiration date must be before or on the event time (${eventLocal}) in your local timezone`
+          );
+        }
       }
+    } catch (err) {
+      errors.push(`Invalid expiration date format: ${err.message}`);
     }
-  } catch (err) {
-    errors.push("Invalid expiration date format");
   }
-}
 
   if (data.walletAddress) {
     const walletValidation = validateWalletAddress(data.walletAddress);
@@ -221,13 +250,34 @@ export const formatCustomDate = (dateString) => {
 };
 
 
-export const getLocalDateString = (isoUtc) => {
-  if (!isoUtc) return undefined;
-  const date = new Date(isoUtc);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
+export const getLocalDateString = (utcDateString) => {
+  if (!utcDateString) return undefined;
+
+  // Force parse as UTC
+  const utcDate = new Date(utcDateString.replace(' ', 'T') + 'Z');
+  if (isNaN(utcDate.getTime())) return undefined;
+
+  // toLocaleString parts in user's timezone
+  const options = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  };
+
+  const formatter = new Intl.DateTimeFormat(undefined, options);
+  const parts = formatter.formatToParts(utcDate);
+
+  const map = {};
+  parts.forEach(({type, value}) => { map[type] = value; });
+
+  const year    = map.year;
+  const month   = map.month.padStart(2, '0');
+  const day     = map.day.padStart(2, '0');
+  const hours   = map.hour.padStart(2, '0');
+  const minutes = map.minute.padStart(2, '0');
+
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };

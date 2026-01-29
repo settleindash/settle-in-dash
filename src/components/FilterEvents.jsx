@@ -32,6 +32,9 @@ const FilterEvents = ({
 
   const now = new Date();
 
+  console.log("NOW =", now);
+
+
 // 1. Liquidity stats — always on full events list (no filter)
 const liquidityStats = useMemo(() => {
   const stats = {};
@@ -62,7 +65,7 @@ const filteredEvents = useMemo(() => {
       const matchesSearch = (e.title || "").toLowerCase().includes(debouncedSearch.toLowerCase().trim());
       const matchesCategory = !categoryFilter || e.category === categoryFilter;
 
-      const eventDate = new Date(e.event_date);
+      const eventDate = new Date(e.event_date + 'Z');
       const isUpcoming = includePastEvents || (!isNaN(eventDate.getTime()) && eventDate > now);
 
       return matchesSearch && matchesCategory && isUpcoming;
