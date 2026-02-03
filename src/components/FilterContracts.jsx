@@ -179,7 +179,7 @@ const orderbookData = useMemo(() => {
             Status
           </label>
           <div className="flex flex-wrap gap-3">
-            {["open", "accepted", "settled", "cancelled"].map((status) => (
+            {["open", "accepted", "settled", "cancelled", "expired"].map((status) => (
               <label key={status} className="flex items-center gap-1.5 cursor-pointer">
                 <input
                   type="checkbox"

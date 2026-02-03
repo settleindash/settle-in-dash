@@ -36,19 +36,26 @@ export const useContracts = () => {
   }, []);
 
   // 1. fetchContracts
-  const fetchContracts = useCallback(
-    async ({ contract_id, event_id, status = null } = {}) => {
-      const cacheKey = contract_id || event_id || status;
-      if (contractCache[cacheKey]) return contractCache[cacheKey];
+const fetchContracts = useCallback(
+  async ({ contract_id, event_id, status = null, forceRefresh = false } = {}) => {
+    const cacheKey = contract_id || event_id || status;
 
-      const result = await post("get_contracts", { contract_id, event_id, status });
-      const fetched = Array.isArray(result.data) ? result.data : [];
-      setContracts(fetched);
-      setContractCache((prev) => ({ ...prev, [cacheKey]: fetched }));
-      return fetched;
-    },
-    [post, contractCache]
-  );
+    // If forceRefresh, skip cache and always fetch fresh
+    if (!forceRefresh && contractCache[cacheKey]) {
+      return contractCache[cacheKey];
+    }
+
+    const result = await post("get_contracts", { contract_id, event_id, status });
+    const fetched = Array.isArray(result.data) ? result.data : [];
+    
+    // Update cache (even on forceRefresh — keeps it fresh)
+    setContracts(fetched);
+    setContractCache((prev) => ({ ...prev, [cacheKey]: fetched }));
+    
+    return fetched;
+  },
+  [post, contractCache]
+);
 
   // 2. createContract
   const createContract = useCallback(
@@ -207,6 +214,103 @@ export const useContracts = () => {
     [post]
   );
 
+// 10. verifyManualSignature — reusable for any component — supports context for creation vs acceptance
+const verifyManualSignature = useCallback(
+  async ({
+    address,
+    manualSignature,
+    context = "creation",
+    contractId = null,
+    setErrorCallback = null,
+    setSubmitErrorCallback = null
+  }) => {
+    if (!manualSignature) {
+      const msg = "Please enter a signature";
+      if (setSubmitErrorCallback) setSubmitErrorCallback(msg);
+      if (setErrorCallback) setErrorCallback(msg);
+      return { isValid: false, message: msg };
+    }
+
+    try {
+      const payload = {
+        action: "verify_signature",
+        data: {
+          address,
+          message: `SettleInDash:${address}`,
+          signature: manualSignature,
+          context,
+        },
+      };
+
+      if (context === "acceptance" && contractId) {
+        payload.data.contract_id = contractId;
+      }
+
+      const response = await fetch(API_BASE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      console.log("Verify response status:", response.status);
+      console.log("Verify parsed result:", result);
+
+      if (!response.ok) {
+        const userMessage = result.message || `Verification failed (HTTP ${response.status})`;
+        if (setSubmitErrorCallback) setSubmitErrorCallback(userMessage);
+        if (setErrorCallback) setErrorCallback(userMessage);
+        return { isValid: false, message: userMessage };
+      }
+
+      if (result.isValid) {
+        return { isValid: true, message: "Signature verified successfully" };
+      } else {
+        const msg = result.message || "Invalid signature — please try signing again.";
+        if (setSubmitErrorCallback) setSubmitErrorCallback(msg);
+        if (setErrorCallback) setErrorCallback(msg);
+        return { isValid: false, message: msg };
+      }
+    } catch (err) {
+      const msg = "Failed to verify signature: " + (err.message || "Network error");
+      if (setSubmitErrorCallback) setSubmitErrorCallback(msg);
+      if (setErrorCallback) setErrorCallback(msg);
+      console.error("Manual signature verification error:", err);
+      return { isValid: false, message: msg };
+    }
+  },
+  []
+);
+
+
+// 11. hasPubkeyCreatedMultisig — new function to check if pubkey has been used to create a multisig before
+const hasPubkeyCreatedMultisig = useCallback(
+  async (pubkey) => {
+    if (!pubkey) {
+      throw new Error("Public key is required");
+    }
+    try {
+      const result = await post("get_contracts", { creator_public_key: pubkey });
+      console.log("get_contracts raw response for pubkey:", pubkey, result); 
+      console.log("Before Array.isArray check:", {
+      resultDataType: typeof result?.data,
+      resultDataValue: result?.data,
+      isArrayFn: typeof Array.isArray
+    });
+
+      const fetchedContracts = Array.isArray(result.data) ? result.data : [];
+      return fetchedContracts.length > 0; // true if any contract exists with this pubkey
+
+    } catch (err) {
+      console.error("Failed to check pubkey usage:", err);
+      throw err;
+    }
+  },
+  [post]
+);
+
+
   // Helpers
   const formatStatus = useCallback((status) => {
     const map = {
@@ -249,11 +353,13 @@ export const useContracts = () => {
       createContract,
       acceptContract,
       settleContract,
-      generateSettlementSigningData,      // ← updated name
+      generateSettlementSigningData,
       validateTransaction,
+      verifyManualSignature,
       listUnspent,
       getTransactionInfo,
       verifySignature,
+      hasPubkeyCreatedMultisig,
 
       // Data & state
       contracts,
@@ -277,6 +383,8 @@ export const useContracts = () => {
       listUnspent,
       getTransactionInfo,
       verifySignature,
+      hasPubkeyCreatedMultisig,
+      verifyManualSignature,
       contracts,
       loading,
       error,

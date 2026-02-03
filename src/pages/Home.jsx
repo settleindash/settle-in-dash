@@ -25,7 +25,7 @@ const Home = () => {
 
            {/* New USP line – prominent, benefit-focused */}
           <p className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl text-primary font-semibold mb-8">
-            When you create an event you and earn 1% of the total payout when it settles!
+             You can create the event and earn 1% of the total payout when it settles!
           </p>
 
           <div className="space-x-2 sm:space-x-4">

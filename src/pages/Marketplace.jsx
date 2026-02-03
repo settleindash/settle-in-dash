@@ -43,6 +43,12 @@ console.log(Intl.DateTimeFormat().resolvedOptions().timeZone);  // What timezone
     fetchData();
   }, [fetchData]);
 
+  // Add this right after fetchData definition
+console.log("fetchData called — hasFetched:", hasFetched);
+console.log("Events after fetch:", events);
+console.log("Contracts after fetch:", contracts);
+
+
 const renderContent = useCallback((filteredEvents, constants) => {
   if (!filteredEvents || filteredEvents.length === 0) {
     return (
@@ -57,36 +63,42 @@ const renderContent = useCallback((filteredEvents, constants) => {
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mt-6">
       {filteredEvents.map((event) => {
         const title = event.title || "Untitled Event";
-        const outcomes = parseOutcomes(event.possible_outcomes);
+        const allOutcomes = parseOutcomes(event.possible_outcomes);
 
-        // Calculate liquidity & probabilities for this event
-        const eventContracts = contracts.filter(c => c.event_id === event.event_id && c.status === "open");
+        // Always show the event card — no skipping
 
-        const probabilities = outcomes.reduce((acc, outcome) => {
-          const sellContracts = eventContracts.filter(
-            c => c.outcome === outcome && c.position_type === "sell"
-          );
+        // Find open sell contracts for this event
+        const eventContracts = contracts.filter(
+          c => c.event_id === event.event_id && 
+               c.status === "open" && 
+               c.position_type === "sell"
+        );
 
-          if (sellContracts.length === 0) {
+        // Only care about "Yes" and "No" outcomes
+        const binaryOutcomes = ["Yes", "No"];
+
+        // For each binary outcome, find the best (highest odds) contract
+        const bestContracts = binaryOutcomes.reduce((acc, outcome) => {
+          const matching = eventContracts.filter(c => c.outcome === outcome);
+          if (matching.length === 0) {
             acc[outcome] = null;
             return acc;
           }
 
-          const bestOdds = Math.min(...sellContracts.map(c => Number(c.odds || Infinity)));
+          // Sort: highest odds first, then oldest
+          const sorted = matching.sort((a, b) => {
+            const oddsDiff = Number(b.odds || 0) - Number(a.odds || 0);
+            if (oddsDiff !== 0) return oddsDiff;
+            return new Date(a.created_at) - new Date(b.created_at);
+          });
 
-          if (bestOdds === Infinity || bestOdds <= 1) {
-            acc[outcome] = null;
-          } else {
-            acc[outcome] = (100 / bestOdds).toFixed(0) + "%";
-          }
-
+          acc[outcome] = sorted[0];
           return acc;
         }, {});
 
-        // Liquidity for display
+        // Liquidity calculation (unchanged)
         const openContracts = contracts.filter(c => c.event_id === event.event_id && c.status === "open");
         const acceptedContracts = contracts.filter(c => c.event_id === event.event_id && c.status === "accepted");
-
         const totalOpen = openContracts.reduce((sum, c) => sum + Number(c.stake || 0), 0).toFixed(2);
         const totalAccepted = acceptedContracts.reduce((sum, c) => {
           return sum + Number(c.stake || 0) + Number(c.accepter_stake || 0);
@@ -94,11 +106,20 @@ const renderContent = useCallback((filteredEvents, constants) => {
 
         return (
           <div key={event.event_id} className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow">
-            <h2 className="text-lg font-bold mb-3">
-              <Link to={`/orderbook?event_id=${event.event_id}`} className="text-blue-600 hover:underline">
-                {title}
-              </Link>
-            </h2>
+            {/* Title in orange box + note */}
+            <div className="bg-orange-100 border border-orange-300 rounded-lg p-4 mb-4 text-center">
+              <h2 className="text-xl font-bold text-orange-800">
+                <Link 
+                  to={`/orderbook?event_id=${event.event_id}`} 
+                  className="hover:underline"
+                >
+                  {title}
+                </Link>
+              </h2>
+              <p className="text-sm text-orange-700 mt-1">
+                Click title to view order book
+              </p>
+            </div>
 
             {/* Liquidity display */}
             <div className="mb-4 text-sm">
@@ -122,32 +143,44 @@ const renderContent = useCallback((filteredEvents, constants) => {
               <strong>Category:</strong> {event.category || "N/A"}
             </p>
 
-            {outcomes.length > 0 ? (
-              <div className="mb-4">
-                <h3 className="text-md font-semibold text-gray-700 mb-3">
-                  Create a Position on:
-                </h3>
-                <div className="space-y-3">
-                  {outcomes.map((outcome) => {
-                    const prob = probabilities[outcome];
+            <div className="mb-4">
+              <h3 className="text-md font-semibold text-gray-700 mb-3">
+                Accept Odds on:
+              </h3>
+              <div className="space-y-3">
+                {binaryOutcomes.map((outcome) => {
+                  const bestContract = bestContracts[outcome];
+                  if (!bestContract) {
                     return (
                       <button
                         key={outcome}
-                        onClick={() => navigate(`/create-contract?event_id=${event.event_id}&outcome=${encodeURIComponent(outcome)}`)}
-                        className="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 transition-colors flex justify-between items-center px-4"
+                        disabled
+                        className="w-full bg-gray-400 text-white py-2 rounded font-medium cursor-not-allowed flex justify-between items-center px-4"
                       >
                         <span>{outcome}</span>
-                        <span className="text-sm bg-blue-800 px-2 py-1 rounded-full">
-                          {prob || "—"}
-                        </span>
+                        <span className="text-sm bg-gray-500 px-2 py-1 rounded-full">No offers</span>
                       </button>
                     );
-                  })}
-                </div>
+                  }
+
+                  const odds = Number(bestContract.odds).toFixed(2);
+                  const link = `/contract/${bestContract.contract_id}`;
+
+                  return (
+                    <Link
+                      key={outcome}
+                      to={link}
+                      className="w-full bg-green-600 text-white py-2 rounded font-medium hover:bg-green-700 transition-colors flex justify-between items-center px-4"
+                    >
+                      <span>Accept {outcome}</span>
+                      <span className="text-sm bg-green-800 px-2 py-1 rounded-full">
+                        {odds}x
+                      </span>
+                    </Link>
+                  );
+                })}
               </div>
-            ) : (
-              <p className="text-sm text-gray-500 italic mb-4">No outcomes defined</p>
-            )}
+            </div>
 
             <p className="text-xs text-gray-500 mt-2">
               ID: {event.event_id}
@@ -158,7 +191,6 @@ const renderContent = useCallback((filteredEvents, constants) => {
     </div>
   );
 }, [navigate, parseOutcomes, contracts, contractsLoading]);
-
 
   if (constantsLoading || eventsLoading || contractsLoading) {
     return (

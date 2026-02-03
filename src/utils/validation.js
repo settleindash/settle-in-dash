@@ -24,6 +24,7 @@ export const parseOutcomes = (outcomes) => {
 };
 
 export const validateEventCreation = async (data) => {
+  console.trace("validateContractCreation was called from:"); 
   const { title, category, event_date, possible_outcomes, event_wallet_address, signature } = data;
   console.log("validateEventCreation: Validating data:", data);
   const errors = [];
@@ -114,7 +115,7 @@ export const validateWalletAddress = (address) => {
 export const validateContractCreation = async (data, selectedEvent) => {
   const errors = [];
 
-  const requiredFields = ['eventId', 'outcome', 'positionType', 'stake', 'odds', 'walletAddress', 'expiration_date', 'signature'];
+  const requiredFields = ['eventId', 'outcome', 'positionType', 'stake', 'odds', 'walletAddress', 'expiration_date'];
   requiredFields.forEach((field) => {
     if (!data[field] || (typeof data[field] === "string" && data[field].trim() === "")) {
       errors.push(`Missing or empty required field: ${field}`);

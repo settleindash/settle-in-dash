@@ -10,13 +10,15 @@ import TermsSummary from "./TermsSummary";
 import PageHeader from "../utils/formats/PageHeader.jsx";
 import QRCode from "qrcode";
 
+
 const CreateContract = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+
   // Hooks
   const { constants, loading: constantsLoading, error: constantsError } = useConstants();
-  const { createContract, loading: contractLoading } = useContracts();
+  const { createContract, verifyManualSignature, hasPubkeyCreatedMultisig, loading: contractLoading } = useContracts();
   const { getEvent } = useEvents();
 
   // State
@@ -44,47 +46,86 @@ const CreateContract = () => {
   const [stakeQrCodeUrl, setStakeQrCodeUrl] = useState(null);
   const [stakeTxValidated, setStakeTxValidated] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [currentMultisig, setCurrentMultisig] = useState(""); // Temporary for current flow
 
+  const [currentMultisig, setCurrentMultisig] = useState("");
+  const [pubkeyAlreadyUsed, setPubkeyAlreadyUsed] = useState(false);
+  const [pubkeyCheckLoading, setPubkeyCheckLoading] = useState(false);
+
+  const [hasVerified, setHasVerified] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   // 1. FETCH CONSTANTS
   // (handled in useConstants.js)
 
   // 2. FETCH EVENT
-  useEffect(() => {
-    const fetchEvent = async () => {
-      setEventLoading(true);
-      setEventError("");
+useEffect(() => {
+  // Only fetch on mount or URL change — do NOT refetch on state changes
 
-      const eventIdFromUrl = new URLSearchParams(location.search).get("event_id");
-      if (!eventIdFromUrl) {
-        setEventError("No event selected");
-        setEventLoading(false);
-        return;
+  const fetchEvent = async () => {
+    setEventLoading(true);
+    setEventError("");
+
+    const eventIdFromUrl = new URLSearchParams(location.search).get("event_id");
+    if (!eventIdFromUrl) {
+      setEventError("No event selected");
+      setEventLoading(false);
+      return;
+    }
+
+    try {
+      const event = await getEvent(eventIdFromUrl);
+      if (!event) throw new Error("Event not found");
+
+      setEventId(event.event_id);
+      setSelectedEvent(event);
+
+      const outcomeFromUrl = new URLSearchParams(location.search).get("outcome");
+      const decoded = decodeURIComponent(outcomeFromUrl || "");
+      if (["Yes", "No"].includes(decoded)) {
+        setOutcome(decoded);
       }
+    } catch (err) {
+      setEventError(err.message);
+    } finally {
+      setEventLoading(false);
+    }
+  };
 
-      try {
-        const event = await getEvent(eventIdFromUrl);
-        if (!event) throw new Error("Event not found");
+  fetchEvent();
+}, [location.search]);
 
-        setEventId(event.event_id);
-        setSelectedEvent(event);
 
-        // Pre-select outcome from URL if present (still only Yes/No allowed)
-        const outcomeFromUrl = new URLSearchParams(location.search).get("outcome");
-        const decoded = decodeURIComponent(outcomeFromUrl || "");
-        if (["Yes", "No"].includes(decoded)) {
-          setOutcome(decoded);
-        }
-      } catch (err) {
-        setEventError(err.message);
-      } finally {
-        setEventLoading(false);
+
+  // 3. Pubkey Already Used
+useEffect(() => {
+  if (!creatorPublicKey || creatorPublicKey.length < 30) {
+    setPubkeyAlreadyUsed(false);
+    return;
+  }
+
+  let timer;
+  const checkPubkey = async () => {
+    setPubkeyCheckLoading(true);
+    try {
+      const hasUsed = await hasPubkeyCreatedMultisig(creatorPublicKey);
+      setPubkeyAlreadyUsed(hasUsed);
+      if (hasUsed) {
+        setError("This public key has already been used to create a contract. Please use a different key.");
       }
-    };
+    } catch (err) {
+      console.error("Pubkey check failed:", err);
+      setError("Failed to check public key usage. Please try again.");
+    } finally {
+      setPubkeyCheckLoading(false);
+    }
+  };
 
-    fetchEvent();
-  }, [getEvent, location.search]);
+  // Debounce: wait 800ms after last keystroke
+  timer = setTimeout(checkPubkey, 800);
+
+  return () => clearTimeout(timer);
+}, [creatorPublicKey, hasPubkeyCreatedMultisig]);
+
 
   // EARLY RETURN
   if (constantsLoading || eventLoading) {
@@ -108,138 +149,134 @@ const CreateContract = () => {
 
   // SAFE TO USE
   const { NETWORK, ORACLE_PUBLIC_KEY, PLACEHOLDER_PUBLIC_KEY, SETTLE_IN_DASH_WALLET } = constants;
-
   const minDateTime = new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16);
 
   // -----------------------------------------------------------------
   // Wallet connection
   // -----------------------------------------------------------------
-  const connectWallet = async () => {
-    if (!walletAddress) return setError("Please enter your DASH wallet address");
-    if (!/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(walletAddress))
-      return setError(`Invalid Dash ${NETWORK} wallet address`);
+const connectWallet = async () => {
+  if (!walletAddress) return setError("Please enter your DASH wallet address");
+  if (!/^y[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(walletAddress))
+    return setError(`Invalid Dash ${NETWORK} wallet address`);
 
-    try {
-      setLoading(true);
-      const url = await QRCode.toDataURL(`signmessage:${walletAddress}:SettleInDash:${walletAddress}:`);
-      setWalletQrCodeUrl(url);
-      setMessage(
-        `Please sign the message 'SettleInDash:${walletAddress}' in Dash Core (Tools &gt; Sign Message) and enter the signature below.`
-      );
-    } catch (err) {
-      setError("Failed to generate QR code for signing: " + err.message);
-      console.error("CreateContract: QR code generation error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    setError(""); // clear previous errors
+
+    // Short message for QR — no duplication
+    const messageToSign = `SettleInDash:${walletAddress}`;
+
+    // Generate QR with just the message
+    const url = await QRCode.toDataURL(messageToSign);
+
+    setWalletQrCodeUrl(url);
+
+  } catch (err) {
+    console.error("QR code generation failed:", err);
+    setError("Failed to generate QR code — please sign manually in Dash Core.");
+    // No fallback text here either — keep UI clean
+  } finally {
+    setLoading(false);
+  }
+};
 
   // -----------------------------------------------------------------
   // Manual signature verification
   // -----------------------------------------------------------------
-  const verifyManualSignature = async (retries = 3) => {
-    if (!manualSignature) return setError("Please enter a signature");
+const handleVerifySignature = async () => {
+    if (hasVerified) {
+    setError("You already verified a signature — use the current multisig or refresh the page.");
+    return;
+  }
+  setIsVerifying(true); 
+  setError("");
+  setSubmitError("");
+  
+  const result = await verifyManualSignature({
+    address: walletAddress,
+    manualSignature,
+    context: "creation",
+    setErrorCallback: setError,
+    setSubmitErrorCallback: setSubmitError
+  });
 
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        setLoading(true);
-        const response = await fetch("https://settleindash.com/api/contracts.php", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "verify_signature",
-            data: {
-              address: walletAddress,
-              message: `SettleInDash:${walletAddress}`,
-              signature: manualSignature,
-            },
-          }),
-        });
-        const result = await response.json();
+  if (result.isValid) {
+    setSignature(manualSignature);
+    setWalletConnected(true);
+    setMessage("Wallet successfully connected and signed!");
+    setManualSignature("");
+    setWalletQrCodeUrl(null);
+    setHasVerified(true);
 
-        if (!response.ok) {
-          if ((response.status === 400 || response.status === 503) && attempt < retries) {
-            await new Promise((r) => setTimeout(r, 1000 * attempt));
-            continue;
-          }
-          throw new Error(`HTTP ${response.status}`);
-        }
+  console.log("JUST SET STATES ────────────────");
+  console.log("signature =", manualSignature.slice(0,10) + "...");
+  console.log("walletConnected =", true);
+  console.log("hasVerified =", true);  // Only refetch if we don't already have a multisig
+  }
+  setIsVerifying(false); 
+};
 
-        if (result.isValid) {
-          setSignature(manualSignature);
-          setWalletConnected(true);
-          setMessage("Wallet successfully connected and signed!");
-          setManualSignature("");
-          setWalletQrCodeUrl(null);
-          return;
-        } else {
-          setError(result.message || "Failed to verify signature");
-          break;
-        }
-      } catch (err) {
-        setError("Failed to verify manual signature: " + err.message);
-        console.error("CreateContract: Manual signature verification error:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
 
   // -----------------------------------------------------------------
   // Generate QR codes (fresh multisig + stake)
   // -----------------------------------------------------------------
-  const generateTransactionQRCodes = async () => {
-    if (!walletConnected || !signature) return setError("Please connect and sign first");
-    if (!stake || Number(stake) <= 0) return setError("Please enter a valid stake amount");
-    if (!creatorPublicKey) return setError("Please provide your public key");
+const generateTransactionQRCodes = async () => {
+  if (!walletConnected || !signature) return setError("Please connect and sign first");
+  if (!stake || Number(stake) <= 0) return setError("Please enter a valid stake amount");
+  if (!creatorPublicKey) return setError("Please provide your public key");
 
-    try {
-      setLoading(true);
-      setMessage("Creating fresh multisig...");
+  // Guard: prevent regenerating multisig after verification
+  if (currentMultisig) {
+    setError("You already generated a multisig with this signature. Use it or refresh the page to start over.");
+    return;
+  }
 
-      // ALWAYS fetch a brand new multisig
-      const multisigResponse = await fetch("https://settleindash.com/api/contracts.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create_multisig",
-          data: {
-            public_keys: [creatorPublicKey, PLACEHOLDER_PUBLIC_KEY, ORACLE_PUBLIC_KEY],
-            required_signatures: 2,
-            network: NETWORK,
-          },
-        }),
-      });
+  try {
+    
+    setLoading(true);
+    setMessage("Creating fresh multisig...");
 
-      if (!multisigResponse.ok) {
-        const errText = await multisigResponse.text();
-        throw new Error(`Multisig creation failed: ${multisigResponse.status} - ${errText}`);
-      }
+    const multisigResponse = await fetch("https://settleindash.com/api/contracts.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "create_multisig",
+        data: {
+          public_keys: [creatorPublicKey, PLACEHOLDER_PUBLIC_KEY, ORACLE_PUBLIC_KEY],
+          required_signatures: 2,
+          network: NETWORK,
+        },
+      }),
+    });
 
-      const multisigResult = await multisigResponse.json();
-      if (!multisigResult.success) {
-        throw new Error(multisigResult.error || "Failed to create multisig");
-      }
-
-      const freshMultisig = multisigResult.multisig_address;
-      setCurrentMultisig(freshMultisig); // temporary for submit
-
-      // 2. Stake QR with fresh address
-      const amount = Number(stake).toFixed(8);
-      const stakeQr = await QRCode.toDataURL(`dash:${freshMultisig}?amount=${amount}`);
-
-      setStakeQrCodeUrl(stakeQr);
-      setMessage(
-        `Send ${amount} DASH to this fresh multisig address:\n${freshMultisig}\n\n` +
-        `Then enter the transaction ID below.`
-      );
-    } catch (err) {
-      setError("Failed to create multisig or QR code: " + err.message);
-      console.error("QR generation error:", err);
-    } finally {
-      setLoading(false);
+    if (!multisigResponse.ok) {
+      const errText = await multisigResponse.text();
+      throw new Error(`Multisig creation failed: ${multisigResponse.status} - ${errText}`);
     }
-  };
+
+    const multisigResult = await multisigResponse.json();
+    if (!multisigResult.success) {
+      throw new Error(multisigResult.error || "Failed to create multisig");
+    }
+
+    const freshMultisig = multisigResult.multisig_address;
+    setCurrentMultisig(freshMultisig);
+
+    const amount = Number(stake).toFixed(8);
+    const stakeQr = await QRCode.toDataURL(`dash:${freshMultisig}?amount=${amount}`);
+
+    setStakeQrCodeUrl(stakeQr);
+    setMessage(
+      `Send ${amount} DASH to this fresh multisig address:\n${freshMultisig}\n\n` +
+      `Then enter the transaction ID below.`
+    );
+  } catch (err) {
+    setError("Failed to create multisig or QR code: " + err.message);
+    console.error("QR generation error:", err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // -----------------------------------------------------------------
   // Transaction validation
@@ -325,16 +362,12 @@ const CreateContract = () => {
   };
 
   const handleValidateTransactions = async () => {
-    if (!transactionId) {
-      setValidationError("Please enter the stake transaction ID");
-      return;
-    }
+
+    
+    if (!transactionId) {setValidationError("Please enter the stake transaction ID");return;}
 
     const amount = Number(stake);
-    if (isNaN(amount) || amount <= 0) {
-      setValidationError("Stake amount must be greater than 0");
-      return;
-    }
+    if (isNaN(amount) || amount <= 0) {setValidationError("Stake amount must be greater than 0");return;}
 
     setValidationError("");
     setMessage("Starting validation...");
@@ -352,89 +385,98 @@ const CreateContract = () => {
   // -----------------------------------------------------------------
   // Form submission
   // -----------------------------------------------------------------
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!walletConnected || !signature) return setError("Please connect and sign first");
-    if (!stakeTxValidated) return setError("Please validate the stake transaction");
-    if (!currentMultisig) return setError("Please generate multisig and stake QR first");
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    setLoading(true);
-    setError("");
-    setSubmitError("");
+  setLoading(true);
+  setError("");
+  setSubmitError("");
 
-    // Enforce Yes/No
-    if (!["Yes", "No"].includes(outcome)) {
-      setError("Outcome must be Yes or No");
-      setLoading(false);
-      return;
-    }
+  console.log("SUBMIT CLICKED ─────────────────");
+  console.log({ walletConnected, signature: signature?.slice(0,10), currentMultisig, stakeTxValidated });
 
-    const validationResult = await validateContractCreation(
-      {
-        eventId,
-        outcome,
-        positionType,
-        stake,
-        odds,
-        walletAddress,
-        expiration_date: acceptanceDeadline,
-        signature,
-      },
-      selectedEvent
-    );
+  // Guards
+  if (!walletConnected) {
+    setSubmitError("Please connect and sign with a valid signature first");
+    setLoading(false);
+    return;
+  }
+  if (!stakeTxValidated) {
+    setSubmitError("Please validate the stake transaction");
+    setLoading(false);
+    return;
+  }
+  if (!currentMultisig) {
+    setSubmitError("Please generate multisig and stake QR first");
+    setLoading(false);
+    return;
+  }
 
-    if (!validationResult.isValid) {
-      setError(validationResult.message);
-      setLoading(false);
-      return;
-    }
+  // Validation (now also covers outcome)
+  const validationResult = await validateContractCreation(
+    {
+      eventId,
+      outcome,
+      positionType,
+      stake,
+      odds,
+      walletAddress,
+      expiration_date: acceptanceDeadline,
+      signature,
+    },
+    selectedEvent
+  );
 
-    try {
-      const result = await createContract({
-        contract_id: `CONTRACT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        event_id: eventId,
-        title: selectedEvent?.title || "",
-        creator_address: walletAddress,
-        outcome,
-        position_type: positionType,
-        stake: Number(stake),
-        odds: Number(odds),
-        acceptance_deadline: new Date(acceptanceDeadline).toISOString(),
-        multisig_address: currentMultisig, // fresh one from this flow
-        refund_transaction_id: "",
-        creator_public_key: creatorPublicKey,
-        transaction_id: transactionId,
-        fee_transaction_id: "",
-        signature,
-      });
+  if (!validationResult.isValid) {
+    setSubmitError(validationResult.message);
+    setLoading(false);
+    return;
+  }
 
-      if (result.error) {
-        let userMsg = "Contract acceptance failed.";
+  try {
+    const result = await createContract({
+      contract_id: `CONTRACT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      event_id: eventId,
+      title: selectedEvent?.title || "",
+      creator_address: walletAddress,
+      outcome,
+      position_type: positionType,
+      stake: Number(stake),
+      odds: Number(odds),
+      acceptance_deadline: new Date(acceptanceDeadline).toISOString(),
+      multisig_address: currentMultisig,
+      refund_transaction_id: "",
+      creator_public_key: creatorPublicKey,
+      transaction_id: transactionId,
+      fee_transaction_id: "",
+      signature,
+    });
 
-        if (result.error_code === "amount_mismatch") {
-          userMsg = result.message || "Wrong stake amount sent. Please send the exact required amount.";
-        } else if (result.message?.toLowerCase().includes("already")) {
-          userMsg = "Contract already accepted — funds are safe. Redirecting to marketplace...";
-          setSubmitError("");
-          setTimeout(() => navigate("/marketplace"), 1500);
-          return;
-        } else {
-          userMsg += " " + (result.error || result.message || "Unknown error");
-        }
+    if (result.error) {
+      let userMsg = "Contract acceptance failed.";
 
-        setSubmitError(userMsg);
+      if (result.error_code === "amount_mismatch") {
+        userMsg = result.message || "Wrong stake amount sent. Please send the exact required amount.";
+      } else if (result.message?.toLowerCase().includes("already")) {
+        userMsg = "Contract already accepted — funds are safe. Redirecting to marketplace...";
+        setTimeout(() => navigate("/marketplace"), 1500);
       } else {
-        setMessage("Contract accepted successfully!");
-        setSubmitError("");
-        navigate("/marketplace");
+        userMsg += " " + (result.error || result.message || "Unknown error");
       }
-    } catch (err) {
-      setSubmitError("Failed to accept contract: " + err.message);
-      console.error("Acceptance error:", err);
-    } finally {
-      setLoading(false);
+
+      setSubmitError(userMsg);
+    } else {
+      setMessage("Contract accepted successfully!");
+      setSubmitError("");
+      navigate("/marketplace");
     }
-  };
+  } catch (err) {
+    setSubmitError("Failed to accept contract: " + (err.message || "Unknown error"));
+    console.error("Acceptance error:", err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // -----------------------------------------------------------------
   // Render
@@ -452,7 +494,7 @@ const CreateContract = () => {
         {message && <p className="text-green-500 text-sm mb-4">{message}</p>}
 
         {selectedEvent ? (
-          <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-6">
+          <form onSubmit= {handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-6">
 
             {/* Event Details */}
             <div className="mb-6">
@@ -526,6 +568,15 @@ const CreateContract = () => {
               <p className="text-gray-600 text-xs mt-1">
                 Run <code>getaddressinfo your_wallet_address</code> in Dash Core ({NETWORK} mode) and copy the <code>pubkey</code> field.
               </p>
+              {/* NEW: feedback */}
+              {pubkeyCheckLoading && (
+                <p className="text-blue-600 text-sm mt-1">Checking if this public key has been used before...</p>
+              )}
+              {pubkeyAlreadyUsed && !pubkeyCheckLoading && (
+                <p className="text-red-600 text-sm mt-1 font-medium">
+                  This public key has already been used to create a contract. Please use a different one.
+                </p>
+              )}
             </div>
 
             {/* Outcome — restricted to Yes / No */}
@@ -667,9 +718,9 @@ const CreateContract = () => {
                       aria-label="Manual signature input"
                     />
                     <button
-                      onClick={() => verifyManualSignature()}
+                      onClick={() => handleVerifySignature()}
                       className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
-                      disabled={loading}
+                      disabled={loading || isVerifying}
                       aria-label="Verify manual signature"
                     >
                       Verify Signature
@@ -686,17 +737,21 @@ const CreateContract = () => {
                 type="button"
                 className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
                 onClick={generateTransactionQRCodes}
-                disabled={loading || !walletConnected || !creatorPublicKey || stakeTxValidated}
+                disabled={loading || !walletConnected || !creatorPublicKey || stakeTxValidated|| pubkeyAlreadyUsed || pubkeyCheckLoading || !hasVerified  }
                 aria-label="Generate transaction QR code"
               >
-                Generate Transaction QR Code
+                {pubkeyCheckLoading
+                  ? "Checking public key..."
+                  : pubkeyAlreadyUsed
+                  ? "Pubkey already used"
+                  : "Generate Transaction QR Code"}
               </button>
 
               {stakeQrCodeUrl && (
                 <div className="mt-4">
                   <div className="mb-4">
                     <p className="text-gray-700 text-sm mb-2">
-                      Stake Transfer: Send {Number(stake).toFixed(8)} DASH to fresh multisig address {currentMultisig}
+                      Stake Transfer: Send {Number(stake).toFixed(8)} DASH to {currentMultisig}
                     </p>
                     <p className="text-gray-600 text-xs mb-2">
                       Note: A small network fee (0.001 DASH) may be deducted from your stake if the contract is refunded or settled.
@@ -749,9 +804,9 @@ const CreateContract = () => {
               <button
                 type="submit"
                 className="w-full bg-orange-500 text-white py-3 rounded hover:bg-orange-600 disabled:opacity-50 text-lg font-bold"
-                disabled={contractLoading || !walletConnected || !signature || !stakeTxValidated || loading || !currentMultisig}
+                disabled={contractLoading || !walletConnected || !signature || !stakeTxValidated || loading || !currentMultisig || !hasVerified }
               >
-                {loading || contractLoading ? "Accepting..." : "Accept Contract"}
+                {loading ? "Accepting..." : "Accept Contract"}
               </button>
 
               {submitError && (

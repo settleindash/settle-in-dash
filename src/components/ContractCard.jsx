@@ -1,5 +1,6 @@
 // src/components/ContractCard.jsx
 // REFACTORED: Uses joined event fields from get_contracts.php — no separate event fetch needed
+// UPDATED: Shows settled_outcome, keeps Oracle Reasoning, added Refresh button
 
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -28,8 +29,10 @@ const ContractCard = ({
     listUnspent,
     accepterStake,
     formatStatus,
+    verifyManualSignature,
     getTransactionInfo,
-    verifySignature
+    verifySignature,
+    fetchContracts // ← ADDED: for refresh
   } = useContracts();
 
   // LOCAL STATE
@@ -48,7 +51,7 @@ const ContractCard = ({
   const [qrCodeUrl, setQrCodeUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [transactionInfo, setTransactionInfo] = useState(null);
-
+  const [refreshing, setRefreshing] = useState(false); // ← NEW: for refresh button
 
   // EARLY RETURN
   if (constantsLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><p>Loading...</p></div>;
@@ -57,16 +60,28 @@ const ContractCard = ({
   const NETWORK = constants?.NETWORK || '';
   const ORACLE_PUBLIC_KEY = constants?.ORACLE_PUBLIC_KEY || '';
 
-  // Use joined event fields (from get_contracts.php)
+  // Use joined event/contract fields
   const eventTitleToDisplay = contract.event_title || eventTitle || "Contract Details";
   const eventDescription = contract.event_description || "";
   const eventPossibleOutcomes = contract.event_possible_outcomes || null;
-  const eventResolution = contract.event_resolution || null;
-  const eventWinningOutcome = contract.event_winning_outcome || null;
   const eventStatus = contract.event_status || null;
 
-  console.log("ORACLE_PUBLIC_KEY =", ORACLE_PUBLIC_KEY);
-  console.log("NETWORK =", NETWORK);
+  // REFRESH CONTRACT (new)
+const handleRefresh = async () => {
+  setRefreshing(true);
+  setMessage("Refreshing contract data...");
+  setError("");
+
+  try {
+    // Force fresh fetch for this contract
+    await fetchContracts({ contract_id: contract.contract_id, forceRefresh: true });
+    setMessage("Contract data refreshed!");
+  } catch (err) {
+    setError("Refresh failed: " + err.message);
+  } finally {
+    setRefreshing(false);
+  }
+};
 
   // WALLET CONNECTION
   const connectWallet = async () => {
@@ -91,47 +106,50 @@ const ContractCard = ({
   };
 
   // MANUAL SIGNATURE VERIFICATION
-  const verifyManualSignature = async () => {
-    if (!manualSignature) return setError("Please enter a signature");
+const handleVerifySignature = async () => {
+  const result = await verifyManualSignature({
+    address: accepterWalletAddress,
+    manualSignature,
+    context: "acceptance",         // allows creator cancellation
+    contractId: contract.contract_id,
+    setErrorCallback: setError,
+    setSubmitErrorCallback: setSubmitError
+  });
 
-    try {
-      setLoading(true);
-      setError("");
-      setSubmitError("");
-      const isValid = await verifySignature(accepterWalletAddress, manualSignature);
-      
-      if (isValid) {
-        setSignature(manualSignature);
-        setWalletConnected(true);
-        setMessage("Wallet verified!");
-        setManualSignature("");
-        setQrCodeUrl(null);
-      } else {
-        setError("Invalid signature");
-      }
-    } catch {
-      setError("Verification failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (result.isValid) {
+    setSignature(manualSignature);
+    setWalletConnected(true);
+    setMessage("Wallet verified!");
+    setManualSignature("");
+    setQrCodeUrl(null);
+  }
+};
 
   // GENERATE STAKE QR CODE
-  const generateStakeQrCode = async () => {
-    if (!walletConnected || !signature) return setError("Connect wallet first");
-    if (contract.status !== "open") return setError("Contract no longer open");
+const generateStakeQrCode = async () => {
+  if (!walletConnected || !signature) return setError("Connect wallet first");
+  if (contract.status !== "open") return setError("Contract no longer open");
 
-    const creatorStake = Number(contract.stake) || 0;
-    const stakeToSend = Number(accepterStake(contract)) || 0;
+  const creatorStake = Number(contract.stake) || 0;
+  const stakeToSend = Number(accepterStake(contract)) || 0;
 
-    if (!contract.multisig_address) return setError("Missing multisig address");
+  // Use the ORIGINAL multisig address (from contract data)
+  const multisigAddr = contract.multisig_address;
 
-    try {
-      setLoading(true);
-      setError("");
-      setSubmitError("");
+  if (!multisigAddr || multisigAddr.length < 26) {
+    setError("No multisig address available — please refresh the page.");
+    return;
+  }
 
-      const result = await listUnspent(contract.multisig_address, 0);
+  try {
+    setLoading(true);
+    setError("");
+    setSubmitError("");
+
+    // SKIP unspent check for self-accept (no new stake needed)
+    const isSelfAccept = accepterWalletAddress === contract.WalletAddress;
+    if (!isSelfAccept) {
+      const result = await listUnspent(multisigAddr, 0);
       if (result.success) {
         const total = result.total_amount || 0;
         const tolerance = 0.001;
@@ -141,17 +159,20 @@ const ContractCard = ({
           return;
         }
       }
-
-      const amount = stakeToSend.toFixed(8);
-      const url = await QRCode.toDataURL(`dash:${contract.multisig_address}?amount=${amount}`);
-      setStakeQrCodeUrl(url);
-      setMessage(`Send ${amount} DASH — you are first!`);
-    } catch (err) {
-      setError("Check failed: " + err.message);
-    } finally {
-      setLoading(false);
+    } else {
+      console.log("Self-accept — skipping unspent check (no new stake)");
     }
-  };
+
+    const amount = stakeToSend.toFixed(8);
+    const url = await QRCode.toDataURL(`dash:${multisigAddr}?amount=${amount}`);
+    setStakeQrCodeUrl(url);
+    setMessage(`Send ${amount} DASH to the multisig address.`);
+  } catch (err) {
+    setError("Check failed: " + (err.message || "Unknown error"));
+  } finally {
+    setLoading(false);
+  }
+};
 
   // VALIDATE STAKE TRANSACTION
   const handleValidateStakeTransaction = async () => {
@@ -195,22 +216,36 @@ const ContractCard = ({
     }
   };
 
-   // ACCEPT CONTRACT — FINAL, WORKING VERSION with submitError
-   const handleAcceptSubmission = async () => {
-    console.log("Accept clicked — starting!");
-    if (!walletConnected || !signature || !stakeTxValidated) return;
+  // ACCEPT CONTRACT
+const handleAcceptSubmission = async () => {
+  console.log("handleAcceptSubmission → STARTED");
 
-    if (!ORACLE_PUBLIC_KEY) {
-      setError("Oracle configuration missing. Please refresh.");
-      return;
-    }
+  if (loading) {
+    console.log("Already loading — ignoring");
+    return;
+  }
 
-    setLoading(true);
-    setError("");
-    setSubmitError("");
+  if (!walletConnected || !signature || !stakeTxValidated) {
+    setSubmitError("Please complete wallet connection and stake validation first");
+    return;
+  }
 
-    try {
-      // Generate NEW 2-of-3 multisig
+  if (!ORACLE_PUBLIC_KEY) {
+    setSubmitError("Oracle configuration missing. Please refresh.");
+    return;
+  }
+
+  setLoading(true);
+  setSubmitError("");
+  setError("");
+
+  try {
+    let multisigResult = null;
+
+    const isSelfAccept = accepterWalletAddress === contract.WalletAddress;
+
+    if (!isSelfAccept) {
+      console.log("Generating new multisig (normal accept)...");
       const multisigResponse = await fetch("https://settleindash.com/api/contracts.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -228,26 +263,42 @@ const ContractCard = ({
         })
       });
 
-      const multisigResult = await multisigResponse.json();
+      multisigResult = await multisigResponse.json();
       if (!multisigResult.success) {
         throw new Error(multisigResult.error || "Failed to create new multisig");
       }
+    } else {
+      console.log("Self-accept — skipping multisig creation");
+    }
 
-      // Accept contract with new multisig
-      const result = await acceptContract(contract.contract_id, {
-        accepterWalletAddress,
-        signature,
-        message: `SettleInDash:${accepterWalletAddress}`,
-        accepter_public_key: accepterPublicKey,
-        accepter_transaction_id: accepterTransactionId,
-        new_multisig_address: multisigResult.multisig_address
-      });
+    console.log("Calling acceptContract...");
+    const payload = {
+      accepterWalletAddress,
+      signature,
+      message: `SettleInDash:${accepterWalletAddress}`,
+      accepter_public_key: accepterPublicKey,
+      accepter_transaction_id: accepterTransactionId,
+    };
 
-      if (result.success) {
+    // Only add new_multisig_address if it exists (normal accept)
+    if (multisigResult?.multisig_address) {
+      payload.new_multisig_address = multisigResult.multisig_address;
+    }
+
+    const result = await acceptContract(contract.contract_id, payload);
+
+    console.log("Accept result:", result);
+
+    if (result.success) {
+      if (result.action === "cancelled") {
+        setMessage(result.message || "You accepted your own contract — it has been cancelled and your stake refunded!");
+        setSubmitError("");
+        await fetchContracts({ contract_id: contract.contract_id, forceRefresh: true });
+        setTimeout(() => navigate("/marketplace"), 3000);
+      } else {
         setMessage("Contract accepted successfully!");
         setSubmitError("");
         onAcceptSuccess?.();
-        // Reset form
         setAccepterWalletAddress("");
         setAccepterPublicKey("");
         setSignature("");
@@ -256,25 +307,26 @@ const ContractCard = ({
         setStakeQrCodeUrl(null);
         setWalletConnected(false);
         if (navigateTo) navigate(navigateTo);
-      } else {
-        let userMsg = "Failed to accept contract.";
-
-        if (result.error_code === "amount_mismatch") {
-          userMsg = result.message || "Wrong stake amount sent. Please send the exact required amount.";
-        } else if (result.message?.toLowerCase().includes("already")) {
-          userMsg = "Contract already accepted — funds are safe.";
-        } else {
-          userMsg += " " + (result.error || result.message || "Unknown error");
-        }
-
-        setSubmitError(userMsg); // Show under Accept button
       }
-    } catch (err) {
-      setSubmitError("Accept failed: " + err.message);
-    } finally {
-      setLoading(false);
+    } else {
+      let userMsg = "Failed to accept contract.";
+      if (result.error_code === "amount_mismatch") {
+        userMsg = result.message || "Wrong stake amount sent. Please send the exact required amount.";
+      } else if (result.message?.toLowerCase().includes("already")) {
+        userMsg = "Contract already accepted — funds are safe.";
+      } else {
+        userMsg += " " + (result.error || result.message || "Unknown error");
+      }
+      setSubmitError(userMsg);
     }
-  };
+  } catch (err) {
+    setSubmitError("Accept failed: " + (err.message || "Unknown error"));
+    console.error("Accept error:", err);
+  } finally {
+    setLoading(false);
+    console.log("handleAcceptSubmission → FINISHED");
+  }
+};
 
   // -----------------------------------------------------------------
   // Render
@@ -282,10 +334,18 @@ const ContractCard = ({
   return (
     <div className={isSingleView ? "min-h-screen bg-background p-4" : ""}>
       {isSingleView && <PageHeader title={eventTitleToDisplay} />}
-      <div className="mb-6 text-center">
+      <div className="mb-6 text-center flex justify-between items-center">
         <Link to="/how-it-works" className="text-blue-500 hover:underline text-sm">
           Learn How It Works
         </Link>
+        {/* REFRESH BUTTON — new */}
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
+        >
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </button>
       </div>
 
       <div className={`bg-white p-6 rounded-lg shadow text-sm mb-4 ${isSingleView ? "" : "mt-6"}`}>
@@ -296,7 +356,7 @@ const ContractCard = ({
         {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
         {message && <p className="text-green-500 text-sm mb-4">{message}</p>}
 
-        {/* EVENT DESCRIPTION — Dedicated prominent box */}
+        {/* EVENT DESCRIPTION */}
         {eventDescription ? (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
             <h3 className="text-md font-semibold text-gray-700 mb-2">Event Description</h3>
@@ -324,46 +384,31 @@ const ContractCard = ({
             <p className="mt-2 text-gray-600">Creator is betting on: {contract.outcome || "Not set"}</p>
           </div>
 
-          {/* Possible Outcomes — Slim & modern */}
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <h3 className="text-md font-semibold text-gray-700">Possible Outcomes</h3>
-            <div className="mt-4 pt-4 border-t border-gray-200">  
-              <div className="flex flex-col items-center gap-2">
-                {(() => {
-                  let outcomes = [];
+{/* Possible Outcomes */}
+<div className="p-4 bg-gray-50 rounded-lg">
+  <h3 className="text-md font-semibold text-gray-700">Possible Outcomes</h3>
+  
+  <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col items-center gap-2">
+    {/* Always show Yes/No for bettable outcomes */}
+    <div className="flex gap-3">
+      <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-900 border border-gray-300">
+        Yes
+      </span>
+      <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-900 border border-gray-300">
+        No
+      </span>
+    </div>
 
-                  // Use the JOINED field from backend
-                  const rawOutcomes = contract.event_possible_outcomes || null;
+    {/* Special note for Event Canceled */}
+    <p className="text-xs text-gray-600 mt-3 text-center">
+      Contracts only support <strong>Yes/No</strong> bets.<br />
+      If the event is canceled, submit  <strong>"Event canceled"</strong> in settled
+      and both stakes will be returned (minus fees).
+    </p>
+  </div>
+</div>
 
-                  if (rawOutcomes) {
-                    if (Array.isArray(rawOutcomes)) {
-                      outcomes = rawOutcomes;
-                    } else if (typeof rawOutcomes === 'string') {
-                      try {
-                        outcomes = JSON.parse(rawOutcomes.trim());
-                      } catch (e) {
-                        console.error("Failed to parse outcomes:", e);
-                        return <span className="text-xs text-red-500">Invalid format</span>;
-                      }
-                    }
-                  }
 
-                  if (outcomes.length === 0) {
-                    return <span className="text-sm text-gray-500 italic">Not specified</span>;
-                  }
-
-                  return outcomes.map((outcome, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-900 border border-gray-300"
-                    >
-                      {String(outcome).trim()}
-                    </span>
-                  ));
-                })()}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* CONTRACT INFO */}
@@ -390,7 +435,7 @@ const ContractCard = ({
               </p>
             </div>
 
-            {/* Accepter (only if accepted) */}
+            {/* Accepter */}
             {contract.status === "accepted" && contract.accepterWalletAddress && (
               <div>
                 <p className="text-sm font-medium text-gray-700">Accepter</p>
@@ -403,9 +448,9 @@ const ContractCard = ({
             {/* Escrow Info */}
             {contract.status === "open" && (
               <div className="pt-4 border-t border-gray-300">
-                <p className="text-sm font-medium text-gray-700 mb-2">Escrow Address (2-of-2)</p>
+                <p className="text-sm font-medium text-gray-700 mb-2">Multisig Open Contract (2-of-3)</p>
                 <p className="text-xs text-gray-600 mb-2">
-                  Creator stake is locked here. Accepter must send matching stake to this address.
+                  Creator stake is locked here. Accepter must send matching stake.
                 </p>
                 <p className="text-xs font-mono bg-blue-50 p-2 rounded break-all border border-blue-200">
                   {contract.multisig_address || "Not set"}
@@ -414,45 +459,33 @@ const ContractCard = ({
             )}
 
             {contract.status === "accepted" && (
-              <>
-                <div className="pt-4 border-t border-gray-300">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Final Escrow (3-of-3 Multisig)</p>
-                  <p className="text-xs text-gray-600 mb-2">
-                    Contains creator stake. Full pot will be controlled from here after resolution.
+              <div className="pt-4 border-t border-gray-300">
+                <p className="text-sm font-medium text-gray-700 mb-2">Multisig Accepted Contract (2-of-3)</p>
+                <p className="text-xs text-gray-600 mb-2">
+                  Full pot controlled from here after resolution.
+                </p>
+                <p className="text-xs font-mono bg-green-50 p-2 rounded break-all border border-green-200">
+                  {contract.new_multisig_address || "Not available"}
+                </p>
+                {contract.pot_creator_txid && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    Funds moved via:{" "}
+                    <a
+                      href={`https://insight.dash.org/insight/tx/${contract.pot_creator_txid}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      {contract.pot_creator_txid}
+                    </a>
                   </p>
-                  <p className="text-xs font-mono bg-green-50 p-2 rounded break-all border border-green-200">
-                    {contract.new_multisig_address || "Not available"}
-                  </p>
-                  {contract.pot_creator_txid && (
-                    <p className="text-xs text-blue-600 mt-2">
-                      Funds moved via:{" "}
-                      <a
-                        href={`https://insight.dash.org/insight/tx/${contract.pot_creator_txid}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline"
-                      >
-                        {contract.pot_creator_txid}
-                      </a>
-                    </p>
-                  )}
-                </div>
-
-                <div className="pt-4 border-t border-gray-300">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Legacy Escrow (2-of-2)</p>
-                  <p className="text-xs text-gray-600 mb-2">
-                    Contains accepter stake only (temporary).
-                  </p>
-                  <p className="text-xs font-mono bg-amber-50 p-2 rounded break-all border border-amber-200">
-                    {contract.multisig_address || "Not set"}
-                  </p>
-                </div>
-              </>
+                )}
+              </div>
             )}
           </div>
         </div>
 
-        {/* RESOLUTION DETAILS */}
+        {/* RESOLUTION DETAILS — UPDATED */}
         <div className="mb-6">
           <h3 className="text-md font-semibold text-gray-700 mb-4">Resolution Details</h3>
           <div className="space-y-5">
@@ -462,7 +495,7 @@ const ContractCard = ({
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <p className="text-sm font-medium text-gray-800 mb-1">Creator's Claim</p>
                     <p className="text-sm text-gray-700">
-                      Winner: <strong>{contract.creator_winner_choice}</strong>
+                      Outcome: <strong>{contract.creator_winner_choice}</strong>
                     </p>
                     {contract.creator_winner_reasoning && (
                       <details className="mt-2 text-sm">
@@ -479,7 +512,7 @@ const ContractCard = ({
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <p className="text-sm font-medium text-gray-800 mb-1">Accepter's Claim</p>
                     <p className="text-sm text-gray-700">
-                      Winner: <strong>{contract.accepter_winner_choice}</strong>
+                      Outcome: <strong>{contract.accepter_winner_choice}</strong>
                     </p>
                     {contract.accepter_winner_reasoning && (
                       <details className="mt-2 text-sm">
@@ -494,15 +527,16 @@ const ContractCard = ({
               </>
             )}
 
-            {eventResolution && (
+            {/* UPDATED: Use settled_outcome */}
+            {contract.settled_outcome && (
               <div className={`p-4 rounded-lg border-2 ${
                 contract.status === "settled" ? "bg-green-50 border-green-300" : "bg-blue-50 border-blue-300"
               }`}>
                 <p className="text-sm font-medium text-gray-800 mb-2">
-                  {contract.status === "settled" ? "Final Resolution" : "Oracle Resolution (Escalated)"}
+                  {contract.status === "settled" ? "Final Settled Outcome" : "Oracle Settled Outcome"}
                 </p>
                 <p className="text-lg font-bold text-gray-900">
-                  Outcome: {eventResolution}
+                  Outcome: {contract.settled_outcome}
                 </p>
                 <p className="text-sm font-semibold text-gray-800 mt-2">
                   Winner: {contract.winner || "Pending payout"}
@@ -529,13 +563,13 @@ const ContractCard = ({
               </p>
             )}
 
-            {contract.status === "accepted" && !eventResolution && (
+            {contract.status === "accepted" && !contract.settled_outcome && (
               <p className="text-sm text-gray-500 italic">
                 Awaiting event outcome and party claims.
               </p>
             )}
 
-            {contract.status === "twist" && !eventResolution && (
+            {contract.status === "twist" && !contract.settled_outcome && (
               <p className="text-sm text-amber-700 font-medium">
                 Dispute escalated — awaiting oracle resolution.
               </p>
@@ -543,43 +577,86 @@ const ContractCard = ({
           </div>
         </div>
 
-        {/* STATUS MESSAGES */}
-        {contract.status === "open" && <p className="text-gray-600 mt-2">Contract is open for acceptance.</p>}
-        {contract.status === "accepted" && <p className="text-green-600 mt-2">This contract has been accepted.</p>}
-        {contract.status === "cancelled" && (
-          <p className="text-yellow-500 mt-2">
-            Cancelled: Creator accepted with the same wallet address.
-            {transactionInfo ? (
-              <span>
-                {" "}
-                Transaction: {transactionInfo.status}, {transactionInfo.amount} DASH,{" "}
-                {formatCustomDate(transactionInfo.timestamp)}
-              </span>
-            ) : (
-              <span> Transaction: Not available</span>
-            )}
+{/* STATUS MESSAGES */}
+<div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+  {contract.status === "open" && (
+    <p className="text-gray-600 font-medium">
+      Contract is open for acceptance until {formatCustomDate(contract.acceptanceDeadline)}.
+    </p>
+  )}
+
+  {contract.status === "accepted" && (
+    <p className="text-green-600 font-medium">
+      Contract has been accepted — awaiting event outcome.
+    </p>
+  )}
+
+  {(contract.status === "cancelled" || contract.status === "expired") && (
+    <p className="text-yellow-600 font-medium">
+      {contract.status === "cancelled"
+        ? "Contract cancelled by mutual agreement — stakes refunded."
+        : "Contract expired — no full acceptance before deadline — stake refunded."}
+      {contract.refund_txid && (
+        <span className="block mt-1 text-sm">
+          Refund TX: <code className="bg-gray-100 px-1 rounded">{contract.refund_txid}</code>
+        </span>
+      )}
+      {!contract.refund_txid && (
+        <span className="block mt-1 text-sm text-gray-500">
+          Refund processed — check your wallet.
+        </span>
+      )}
+    </p>
+  )}
+
+  {contract.status === "settled" && (
+    <p className="text-green-600 font-medium">
+      Contract settled — outcome: <strong>{contract.settled_outcome ?? "Not set"}</strong>
+      {contract.winner && (
+        <span className="block mt-1">
+          Winner: <strong>{contract.winner}</strong>
+        </span>
+      )}
+      {contract.event_resolution_timestamp && (
+        <span className="block mt-1 text-sm text-gray-600">
+          Settled on: {formatCustomDate(contract.event_resolution_timestamp)}
+        </span>
+      )}
+      {contract.event_resolution_reasoning && (
+        <details className="mt-2 text-sm">
+          <summary className="cursor-pointer text-blue-600 hover:underline">
+            View Oracle Reasoning
+          </summary>
+          <p className="mt-1 text-gray-700 whitespace-pre-wrap bg-white p-2 rounded border">
+            {contract.event_resolution_reasoning}
           </p>
-        )}
-        {contract.status === "settled" && (
-          <p className="text-green-600 mt-2">
-            Settled: Outcome - {eventResolution ?? "Not set"}
-            {transactionInfo ? (
-              <span>
-                {" "}
-                Transaction: {transactionInfo.status}, {transactionInfo.amount} DASH,{" "}
-                {formatCustomDate(transactionInfo.timestamp)}
-              </span>
-            ) : (
-              <span> Transaction: Not available</span>
-            )}
+        </details>
+      )}
+    </p>
+  )}
+
+  {contract.status === "twist" && (
+    <p className="text-blue-600 font-medium">
+      Dispute escalated to Twist — awaiting oracle resolution.
+      {contract.event_resolution_reasoning && (
+        <details className="mt-2 text-sm">
+          <summary className="cursor-pointer text-blue-600 hover:underline">
+            View Current Oracle Reasoning
+          </summary>
+          <p className="mt-1 text-gray-700 whitespace-pre-wrap bg-white p-2 rounded border">
+            {contract.event_resolution_reasoning}
           </p>
-        )}
-        {contract.status === "twist" && (
-          <p className="text-blue-600 mt-2">
-            Escalated to Twist: Awaiting resolution.
-            {contract.event_resolution_reasoning && <span> Reason: {contract.event_resolution_reasoning}</span>}
-          </p>
-        )}
+        </details>
+      )}
+    </p>
+  )}
+
+  {!["open", "accepted", "cancelled", "expired", "settled", "twist"].includes(contract.status) && (
+    <p className="text-gray-500 italic">
+      Unknown contract status: {contract.status}
+    </p>
+  )}
+</div>
 
         {/* ACCEPT FORM */}
         {contract.status === "open" && (
@@ -600,7 +677,6 @@ const ContractCard = ({
               value={accepterWalletAddress}
               onChange={(e) => setAccepterWalletAddress(e.target.value)}
               placeholder={`Enter a valid DASH ${NETWORK} address (starts with 'y')`}
-              aria-label="Accepter wallet address"
               disabled={contract.status !== "open" || loading}
             />
 
@@ -659,7 +735,7 @@ const ContractCard = ({
                       aria-label="Manual signature input"
                     />
                     <button
-                      onClick={() => verifyManualSignature()}
+                      onClick={() => handleVerifySignature()}
                       className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
                       disabled={loading}
                       aria-label="Verify Signature"
