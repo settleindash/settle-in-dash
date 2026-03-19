@@ -1,7 +1,7 @@
 // src/components/SettleContractForm.jsx
-// Updated: Full support for outcome changes, better UX & feedback
+// Updated: Raw tx flow only (no PSBT, no setup multisig box, chaining support)
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useEvents } from "../hooks/useEvents";
 
 const SettleContractForm = ({
@@ -19,15 +19,12 @@ const SettleContractForm = ({
   const [reasoning, setReasoning] = useState("");
   const [selectedParty, setSelectedParty] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
-  const [unsignedHex, setUnsignedHex] = useState("");
-  const [prevtxs, setPrevtxs] = useState([]);
-  const [redeemScript, setRedeemScript] = useState("");
-  const [signedPartial, setSignedPartial] = useState("");
+  const [signedTxHex, setSignedTxHex] = useState("");  // signed raw tx hex
   const [messageSignature, setMessageSignature] = useState("");
   const [loading, setLoading] = useState(false);
-  const [signingCommand, setSigningCommand] = useState("");
   const [instructionMessage, setInstructionMessage] = useState("");
-  const [statusMessage, setStatusMessage] = useState(""); // New: feedback after submit
+  const [statusMessage, setStatusMessage] = useState("");
+  const [txData, setTxData] = useState(null);
 
   const contract = filteredContracts.find((c) => c.contract_id === selectedContractId);
   if (!contract) return <p className="text-red-500">Contract not found.</p>;
@@ -58,7 +55,7 @@ const SettleContractForm = ({
     }
   };
 
-  const generateSigningData = async () => {
+  const fetchTxData = async () => {
     if (!walletAddress || !claimedOutcome) {
       setError("Select your role and an outcome first");
       return;
@@ -67,20 +64,18 @@ const SettleContractForm = ({
     setLoading(true);
     setError("");
     setStatusMessage("");
-    setUnsignedHex("");
-    setPrevtxs([]);
-    setRedeemScript("");
-    setSigningCommand("");
+    setTxData(null);
+    setSignedTxHex("");
 
     try {
       const messageToSign = `SettleInDASH settlement:${selectedContractId}:${claimedOutcome}`;
 
-      // Instruction for message signing
+      // Initial instruction (shown before signature)
       setInstructionMessage(
         `Step 1: In Dash Core Debug console, run:\n\n` +
         `signmessage "${walletAddress}" "${messageToSign}"\n\n` +
         `Copy the full signature (long base64 string) and paste it in the "Message Signature" field below.\n\n` +
-        `Then click "Generate Signing Command" again.`
+        `Then click "Fetch Tx to Sign" again.`
       );
 
       if (!messageSignature.trim()) {
@@ -109,82 +104,83 @@ const SettleContractForm = ({
       console.log("[FRONTEND] generate response:", data);
 
       if (!data.success) {
-        throw new Error(data.error || "Backend failed to generate signing data");
+        throw new Error(data.error || "Backend failed to generate transaction data");
       }
 
-      setUnsignedHex(data.unsigned_tx_hex);
-      setPrevtxs(data.prevtxs || []);
-      setRedeemScript(data.redeem_script || "");
+      setTxData(data);
 
-      const prevtxsJson = JSON.stringify(data.prevtxs, null, 0);
-      const cmd = `signrawtransactionwithkey "${data.unsigned_tx_hex}" '["YOUR_PRIVATE_KEY_HERE"]' '${prevtxsJson}'`;
-      setSigningCommand(cmd);
+      // Instruction with chaining support
+      const signHex = data.latest_signed_hex || data.unsigned_tx_hex;
+      const cmd = `signrawtransactionwithkey "${signHex}" '["YOUR_PRIVATE_KEY_HERE"]' '${JSON.stringify(data.prevtxs, null, 2)}'`;
 
       setInstructionMessage(
-        `Step 2: Replace "YOUR_PRIVATE_KEY_HERE" with your private key (from dumpprivkey ${walletAddress}), run in Dash Core, then paste the "hex" output below.`
+        `Step 1 – Sign the transaction:\n${cmd}\n\n` +
+        (data.latest_signed_hex 
+          ? `(Previous partial signature exists for ${claimedOutcome}. Sign THIS hex to add your signature on top.)\n\n`
+          : `(Sign the unsigned transaction to start the chain for ${claimedOutcome}.)\n\n`) +
+        `Replace "YOUR_PRIVATE_KEY_HERE" with your private key (run dumpprivkey ${walletAddress} to get it).\n` +
+        `Run in Debug console → copy the "hex" value from result → paste below.\n\n` +
+        `Alternative: Use Sparrow Wallet (import key + script → load tx → sign → export).\n\n` +
+        `Review outputs before signing:\n` +
+        `  Winner: ${data.details.winner_amount} DASH → ${data.details.winner_address}\n` +
+        `  Platform fee: ${data.details.platform_fee} DASH\n` +
+        `  Miner fee (platform pays): ${data.details.miner_fee} DASH\n\n` +
+        `Paste the signed raw tx hex below.`
       );
 
-      setStatusMessage("Transaction ready to sign. You can resubmit later to change your outcome (before agreement is reached).");
+      setStatusMessage("Transaction data fetched. Follow steps above and paste signed raw tx hex below.");
     } catch (err) {
-      console.error("[FRONTEND] generate failed:", err);
-      setError("Failed to generate signing data: " + (err.message || "Unknown error"));
+      console.error("[FRONTEND] Tx fetch failed:", err);
+      setError("Failed to fetch transaction data: " + (err.message || "Unknown error"));
     } finally {
       setLoading(false);
     }
   };
 
-const handleSubmit = async () => {
-  if (!signedPartial.trim()) {
-    setError("Please paste the signed transaction hex first");
-    return;
-  }
-  if (!messageSignature.trim()) {
-    setError("Please paste the message signature first");
-    return;
-  }
+  const handleSubmit = async () => {
+    if (!signedTxHex.trim()) {
+      setError("Please paste the signed raw tx hex first");
+      return;
+    }
+    if (!messageSignature.trim()) {
+      setError("Please paste the message signature first");
+      return;
+    }
 
-  setLoading(true);
-  setError("");
-  setStatusMessage("Submitting your vote & signature...");
+    setLoading(true);
+    setError("");
+    setStatusMessage("Submitting your vote & signed raw tx hex...");
 
-  try {
-    const messageToSign = `SettleInDASH settlement:${selectedContractId}:${claimedOutcome}`;
+    try {
+      const messageToSign = `SettleInDASH settlement:${selectedContractId}:${claimedOutcome}`;
 
-    const result = await settleContract(
-      selectedContractId,
-      claimedOutcome,
-      reasoning,
-      walletAddress,
-      signedPartial,
-      messageSignature,
-      messageToSign
-    );
+      const result = await settleContract(
+        selectedContractId,
+        claimedOutcome,
+        reasoning,
+        walletAddress,
+        signedTxHex,
+        messageSignature,
+        messageToSign
+      );
 
-    if (result.success) {
-      setStatusMessage("Success! Your submission was accepted. Refreshing contract status...");
-      
-      // NEW: Trigger refresh in parent
-      if (onSuccess) {
-        onSuccess();
+      if (result.success) {
+        setStatusMessage("Success! Your submission was accepted. Refreshing...");
+        if (onSuccess) onSuccess();
+        setTimeout(() => setSelectedContract(null), 3000);
+      } else {
+        setError(result.error || "Submission failed");
       }
-
-      // Optional: close form after short delay (gives user time to read message)
-      setTimeout(() => {
-        setSelectedContract(null);
-      }, 3000);
-    } else {
-      setError(result.error || "Submission failed");
+    } catch (err) {
+      let msg = err.message || "Unknown error";
+      if (err.message?.includes("502")) {
+        msg = "Server timeout — settlement may still be processing. Check status in a minute.";
+      }
+      setError("Error: " + msg);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    let msg = err.message || "Unknown error";
-    if (err.message?.includes("502")) {
-      msg = "Server timeout — settlement may still be processing. Check status in a minute.";
-    }
-    setError("Error: " + msg);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
@@ -261,49 +257,73 @@ const handleSubmit = async () => {
           </p>
         </div>
 
-        {/* Generate & Sign Transaction */}
+        {/* Raw Tx Signing Section */}
         <div className="mb-6">
           <label className="block text-base font-medium text-gray-700 mb-2">
-            Sign to Support Your Outcome
+            Sign to Support Your Outcome (Raw Tx)
           </label>
 
           <button
             className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
-            onClick={generateSigningData}
+            onClick={fetchTxData}
             disabled={loading || !selectedParty || !walletAddress || !claimedOutcome || !messageSignature.trim()}
           >
-            {loading ? "Generating..." : "Generate Signing Command"}
+            {loading ? "Fetching..." : "Generate Signing Command"}
           </button>
 
-          {signingCommand && (
-            <div className="space-y-4">
-              {/* Command + copy */}
+          {txData && (
+            <div className="space-y-5">
+              {/* Summary Card */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                <p className="font-medium mb-2">Settlement Summary:</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Pot: {txData.details.pot} DASH</li>
+                  <li>Winner: {txData.details.winner_amount} DASH to {txData.details.winner_address}</li>
+                  <li>Event creator fee (platform pays): {txData.details.event_creator_fee} DASH</li>
+                  <li>Platform fee: {txData.details.platform_fee} DASH</li>
+                </ul>
+              </div>
+
+              {/* Step 1 - Sign Command */}
               <div className="p-3 bg-gray-100 rounded-lg border border-gray-300 font-mono text-sm break-all">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="font-medium">Full signing command:</span>
+                  <span className="font-medium">Step 1 – Sign Raw Tx:</span>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(signingCommand);
-                      alert("Command copied!");
+                      const signHex = txData.latest_signed_hex || txData.unsigned_tx_hex;
+                      const fullCommand = `signrawtransactionwithkey "${signHex}" '["YOUR_PRIVATE_KEY_HERE"]' '${JSON.stringify(txData.prevtxs)}'`;
+                      navigator.clipboard.writeText(fullCommand);
+                      alert("Sign command copied! Paste into Dash Core console.");
                     }}
                     className="text-blue-600 hover:text-blue-800 text-xs underline"
                   >
-                    Copy
+                    Copy Sign Command
                   </button>
                 </div>
-                {signingCommand}
+                <div className="whitespace-pre-wrap break-words">
+                  {txData.latest_signed_hex
+                    ? `signrawtransactionwithkey "${txData.latest_signed_hex}" '["YOUR_PRIVATE_KEY_HERE"]' '${JSON.stringify(txData.prevtxs)}'`
+                    : `signrawtransactionwithkey "${txData.unsigned_tx_hex}" '["YOUR_PRIVATE_KEY_HERE"]' '${JSON.stringify(txData.prevtxs)}'`}
+                </div>
+                <p className="text-xs text-gray-600 mt-2">
+                  {txData.latest_signed_hex
+                    ? "Previous partial signature exists. Sign the hex above to add your signature."
+                    : "Sign the unsigned transaction to start the chain."}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">
+                  Replace "YOUR_PRIVATE_KEY_HERE" with your private key (run dumpprivkey {walletAddress} to get it).
+                </p>
               </div>
 
-              {/* Instructions */}
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+              {/* Instructions Card */}
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
                 <p className="font-medium mb-2">How to sign in Dash Core:</p>
                 <ol className="list-decimal pl-5 space-y-1">
                   <li>Unlock wallet: <code>walletpassphrase "yourpass" 600</code></li>
                   <li>Get key: <code>dumpprivkey {walletAddress}</code></li>
                   <li>Copy command above</li>
                   <li>Paste in Debug console</li>
-                  <li>Replace "YOUR_PRIVATE_KEY_HERE" with your key</li>
-                  <li>Run → copy <strong>"hex"</strong> value</li>
+                  <li>Run → copy <strong>"hex"</strong> value from result</li>
                   <li>Paste below</li>
                 </ol>
                 <p className="mt-3 text-red-600 font-medium">
@@ -314,20 +334,20 @@ const handleSubmit = async () => {
                 </p>
               </div>
 
-              {/* Signed tx hex */}
+              {/* Signed Raw Tx Input */}
               <textarea
-                className="w-full border border-gray-300 rounded-lg p-3 font-mono text-sm min-h-[120px]"
-                value={signedPartial}
-                onChange={(e) => setSignedPartial(e.target.value)}
-                placeholder="Paste the signed transaction hex here (starts with 020000...)"
+                className="w-full border border-gray-300 rounded-lg p-3 font-mono text-sm min-h-[140px]"
+                value={signedTxHex}
+                onChange={(e) => setSignedTxHex(e.target.value)}
+                placeholder="Paste the signed raw tx hex here (starts with 02000000...)"
               />
 
               <button
                 className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 onClick={handleSubmit}
-                disabled={loading || !signedPartial.trim() || !messageSignature.trim()}
+                disabled={loading || !signedTxHex.trim() || !messageSignature.trim()}
               >
-                {loading ? "Submitting..." : "Submit Vote & Signature"}
+                {loading ? "Submitting..." : "Submit Vote & Signed Tx Hex"}
               </button>
             </div>
           )}

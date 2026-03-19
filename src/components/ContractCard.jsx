@@ -246,6 +246,15 @@ const handleAcceptSubmission = async () => {
 
     if (!isSelfAccept) {
       console.log("Generating new multisig (normal accept)...");
+      console.log("Preparing new multisig with pubkeys:");
+      console.log("Creator:", contract.creator_public_key);
+      console.log("Accepter:", accepterPublicKey);
+      console.log("Oracle:", ORACLE_PUBLIC_KEY);
+      console.log("Full array:", [
+        contract.creator_public_key,
+        accepterPublicKey,
+        ORACLE_PUBLIC_KEY
+      ]);
       const multisigResponse = await fetch("https://settleindash.com/api/contracts.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -381,7 +390,7 @@ const handleAcceptSubmission = async () => {
             <p className="mt-2 text-gray-600">Odds: {contract.odds ?? "Not set"}</p>
             <p className="mt-2 text-gray-600">Accepter Stake: {contract.accepter_stake ? `${contract.accepter_stake} DASH` : accepterStake(contract) || "Not set"}</p>
             <p className="mt-2 text-gray-600">Acceptance Deadline: {formatCustomDate(contract.acceptanceDeadline)}</p>
-            <p className="mt-2 text-gray-600">Creator is betting on: {contract.outcome || "Not set"}</p>
+            <p className="mt-2 text-gray-600">Accept a contract for: {contract.outcome || "Not set"}</p>
           </div>
 
 {/* Possible Outcomes */}
@@ -407,7 +416,6 @@ const handleAcceptSubmission = async () => {
     </p>
   </div>
 </div>
-
 
         </div>
 
@@ -492,6 +500,22 @@ const handleAcceptSubmission = async () => {
             {(contract.status === "settled" || contract.status === "twist") && (
               <>
                 {contract.creator_winner_choice && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-gray-800 mb-1">Oracle's Claim</p>
+                  <p className="text-sm text-gray-700">
+                    Outcome: <strong>{contract.grok_winner_choice}</strong>
+                  </p>
+                  {contract.creator_winner_reasoning && (
+                    <details className="mt-2 text-sm">
+                      <summary className="cursor-pointer text-primary hover:underline">View Reasoning</summary>
+                      <p className="mt-2 text-gray-700 whitespace-pre-wrap bg-white p-3 rounded border">
+                        {contract.event_resolution_reasoning}
+                      </p>
+                    </details>
+                  )}
+                </div>
+                )}
+                {contract.creator_winner_choice && (
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <p className="text-sm font-medium text-gray-800 mb-1">Creator's Claim</p>
                     <p className="text-sm text-gray-700">
@@ -541,11 +565,14 @@ const handleAcceptSubmission = async () => {
                 <p className="text-sm font-semibold text-gray-800 mt-2">
                   Winner: {contract.winner || "Pending payout"}
                 </p>
+                
                 {contract.event_resolution_timestamp && (
-                  <p className="text-xs text-gray-600 mt-2">
-                    Resolved on: {formatCustomDate(contract.event_resolution_timestamp)}
-                  </p>
+                  <div className="mt-2 text-xs text-gray-600 space-y-1">
+                    <p>Resolved on: {formatCustomDate(contract.event_resolution_timestamp)}</p>
+                    <p>Multisig Accepted Contract (2-of-3): {contract.new_multisig_address || "Not available"}</p>
+                  </div>
                 )}
+
                 {contract.event_resolution_reasoning && (
                   <details className="mt-3 text-sm">
                     <summary className="cursor-pointer text-primary hover:underline font-medium">Oracle Reasoning</summary>
@@ -578,85 +605,13 @@ const handleAcceptSubmission = async () => {
         </div>
 
 {/* STATUS MESSAGES */}
-<div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-  {contract.status === "open" && (
+{contract.status === "open" && (
+  <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
     <p className="text-gray-600 font-medium">
       Contract is open for acceptance until {formatCustomDate(contract.acceptanceDeadline)}.
     </p>
-  )}
-
-  {contract.status === "accepted" && (
-    <p className="text-green-600 font-medium">
-      Contract has been accepted — awaiting event outcome.
-    </p>
-  )}
-
-  {(contract.status === "cancelled" || contract.status === "expired") && (
-    <p className="text-yellow-600 font-medium">
-      {contract.status === "cancelled"
-        ? "Contract cancelled by mutual agreement — stakes refunded."
-        : "Contract expired — no full acceptance before deadline — stake refunded."}
-      {contract.refund_txid && (
-        <span className="block mt-1 text-sm">
-          Refund TX: <code className="bg-gray-100 px-1 rounded">{contract.refund_txid}</code>
-        </span>
-      )}
-      {!contract.refund_txid && (
-        <span className="block mt-1 text-sm text-gray-500">
-          Refund processed — check your wallet.
-        </span>
-      )}
-    </p>
-  )}
-
-  {contract.status === "settled" && (
-    <p className="text-green-600 font-medium">
-      Contract settled — outcome: <strong>{contract.settled_outcome ?? "Not set"}</strong>
-      {contract.winner && (
-        <span className="block mt-1">
-          Winner: <strong>{contract.winner}</strong>
-        </span>
-      )}
-      {contract.event_resolution_timestamp && (
-        <span className="block mt-1 text-sm text-gray-600">
-          Settled on: {formatCustomDate(contract.event_resolution_timestamp)}
-        </span>
-      )}
-      {contract.event_resolution_reasoning && (
-        <details className="mt-2 text-sm">
-          <summary className="cursor-pointer text-blue-600 hover:underline">
-            View Oracle Reasoning
-          </summary>
-          <p className="mt-1 text-gray-700 whitespace-pre-wrap bg-white p-2 rounded border">
-            {contract.event_resolution_reasoning}
-          </p>
-        </details>
-      )}
-    </p>
-  )}
-
-  {contract.status === "twist" && (
-    <p className="text-blue-600 font-medium">
-      Dispute escalated to Twist — awaiting oracle resolution.
-      {contract.event_resolution_reasoning && (
-        <details className="mt-2 text-sm">
-          <summary className="cursor-pointer text-blue-600 hover:underline">
-            View Current Oracle Reasoning
-          </summary>
-          <p className="mt-1 text-gray-700 whitespace-pre-wrap bg-white p-2 rounded border">
-            {contract.event_resolution_reasoning}
-          </p>
-        </details>
-      )}
-    </p>
-  )}
-
-  {!["open", "accepted", "cancelled", "expired", "settled", "twist"].includes(contract.status) && (
-    <p className="text-gray-500 italic">
-      Unknown contract status: {contract.status}
-    </p>
-  )}
-</div>
+  </div>
+)}
 
         {/* ACCEPT FORM */}
         {contract.status === "open" && (

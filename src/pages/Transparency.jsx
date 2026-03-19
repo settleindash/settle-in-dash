@@ -27,7 +27,7 @@ const Transparency = () => {
       eventPossibleOutcomes: contract.event_possible_outcomes || null,
       eventWinningOutcome: contract.event_winning_outcome || null,
       eventStatus: contract.event_status || null,
-      displayResolution: contract.settled_outcome || contract.event_winning_outcome || "Pending"
+      displayResolution: contract.settled_outcome || "Pending"
     }));
   }, [contracts]);
 
