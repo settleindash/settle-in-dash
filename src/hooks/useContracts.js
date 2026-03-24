@@ -60,6 +60,7 @@ const fetchContracts = useCallback(
   // 2. createContract
   const createContract = useCallback(
     async (contractData) => {
+      console.log("[useContracts] Sending create_contract payload:", contractData);
       const result = await post("create_contract", contractData);
       if (result.success) {
         setContracts((prev) => [...prev, result.data]);

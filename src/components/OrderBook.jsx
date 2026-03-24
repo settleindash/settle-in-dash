@@ -12,7 +12,6 @@ const OrderBook = () => {
   const navigate = useNavigate();
   const query = new URLSearchParams(location.search);
   const event_id = query.get("event_id");
-  const selectedOutcome = query.get("outcome");
 
   const { contracts, fetchContracts, loading, error } = useContracts();
   const { events, getEvents } = useEvents();
@@ -153,7 +152,8 @@ const OrderBook = () => {
           eventId={event_id}
           renderContent={null} // Use internal orderbook rendering
           showFilters={true}
-          showPastDeadlineOption={true} 
+          showPastDeadlineOption={true}
+          visibleStatuses={["open"]} 
         />
 
         {/* Liquidity Summary */}

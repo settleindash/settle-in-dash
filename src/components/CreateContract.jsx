@@ -438,6 +438,7 @@ const handleSubmit = async (e) => {
       contract_id: `CONTRACT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       event_id: eventId,
       title: selectedEvent?.title || "",
+      category: selectedEvent?.category || "Other",
       creator_address: walletAddress,
       outcome,
       position_type: positionType,

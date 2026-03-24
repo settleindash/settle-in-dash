@@ -15,26 +15,51 @@ const FilterContracts = ({
   eventId, // Optional: pre-filter by event
   onRefresh, // Optional: callback for refresh button
   showPastDeadlineOption = false,
+  visibleStatuses = null,
 }) => {
+
+  // ────────────────────────────────────────────────
+  // Define behavior per view mode in one central place
+  // ────────────────────────────────────────────────
+  const viewModeConfig = {
+    orderbook: {
+      defaultStatusFilter: ["open"],
+      defaultSort: { field: "odds", direction: "desc" },
+      showStatusFilter: false,           // hide status checkboxes in orderbook
+      allowedSortFields: ["odds", "stake", "created_at"],
+    },
+    list: {
+      defaultStatusFilter: [],
+      defaultSort: { field: "created_at", direction: "desc" },
+      showStatusFilter: true,
+      allowedSortFields: ["created_at", "acceptanceDeadline", "stake"],
+    },
+    // You can easily add more modes later, e.g.:
+    // "my-positions": { ... },
+    // "history": { ... },
+  };
+  // Fallback to "list" mode if unknown viewMode is passed
+  const config = viewModeConfig[viewMode] || viewModeConfig.list;
+
+  // ────────────────────────────────────────────────
+  // Initialize state using the config
+  // ────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState(
-    viewMode === "orderbook" ? ["open"] : []
-  );
-  const [sortBy, setSortBy] = useState(
-    viewMode === "orderbook" ? { field: "odds", direction: "desc" } : { field: "created_at", direction: "desc" }
-  );
+  const [statusFilter, setStatusFilter] = useState(viewMode === "orderbook" ? ["open"] : []);
+  const [sortBy, setSortBy] = useState(viewMode === "orderbook" ? { field: "odds", direction: "desc" } : { field: "created_at", direction: "desc" });
   const [page, setPage] = useState(1);
   const [showPastDeadline, setShowPastDeadline] = useState(false); 
-
   const debouncedSetSearch = useCallback(debounce(setDebouncedSearch, 300), []);
+  const defaultStatuses = ["open", "accepted", "settled", "expired", "cancelled"];
+  const statusesToShow = visibleStatuses || defaultStatuses;
+
 
   useEffect(() => {
     debouncedSetSearch(search);
     setPage(1);
   }, [search, debouncedSetSearch]);
 
-  //const now = useMemo(() => new Date(), []); OLD
 const now = new Date();
 
   const filteredContracts = useMemo(() => {
@@ -87,7 +112,6 @@ const now = new Date();
   }, [contracts, debouncedSearch, statusFilter, sortBy, eventId, showPastDeadline, showPastDeadlineOption, now]);
 
   const paginated = filteredContracts.slice((page - 1) * contractsPerPage, page * contractsPerPage);
-
   const showingFrom = (page - 1) * contractsPerPage + 1;
   const showingTo = Math.min(page * contractsPerPage, filteredContracts.length);
 
@@ -107,7 +131,6 @@ const orderbookData = useMemo(() => {
   });
 
   const totalLiquidityAll = groups.reduce((sum, g) => sum + g.totalLiquidity, 0);
-
   const maxRows = Math.max(...groups.map(g => g.contracts.length), 1);
 
   // Pre-calculate Avg Odds per row
@@ -124,7 +147,6 @@ const orderbookData = useMemo(() => {
 
   return { groups, totalLiquidityAll, rowAverages, maxRows };
 }, [filteredContracts, viewMode]);
-
 
 
   const clearFilters = () => {
@@ -154,9 +176,9 @@ const orderbookData = useMemo(() => {
     </div>
 
     <div className="space-y-5">
-      {/* First row: Search + Status + Sort */}
+      {/* First row: Search + Status (conditional) + Sort */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Search */}
+        {/* Search – always visible */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
             Search
@@ -173,84 +195,85 @@ const orderbookData = useMemo(() => {
           />
         </div>
 
-        {/* Status */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Status
-          </label>
-          <div className="flex flex-wrap gap-3">
-            {["open", "accepted", "settled", "cancelled", "expired"].map((status) => (
-              <label key={status} className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={statusFilter.includes(status)}
-                  onChange={(e) => {
-                    setStatusFilter((prev) =>
-                      e.target.checked ? [...prev, status] : prev.filter((s) => s !== status)
-                    );
-                    setPage(1);
-                  }}
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700 capitalize">{status}</span>
-              </label>
-            ))}
+        {/* Status – only shown when config allows it (e.g. hidden in orderbook) */}
+        {config.showStatusFilter && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Status
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {statusesToShow.map((status) => (
+                <label key={status} className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={statusFilter.includes(status)}
+                    onChange={(e) => {
+                      setStatusFilter((prev) =>
+                        e.target.checked ? [...prev, status] : prev.filter((s) => s !== status)
+                      );
+                      setPage(1);
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 capitalize">{status}</span>
+                </label>
+              ))}
+            </div>
           </div>
+        )}
+
+        {/* Sort by – always visible */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-sm font-medium text-gray-700">
+              Sort by
+            </label>
+
+            <div className="flex items-center gap-2">
+              {/* Direction toggle */}
+              <button
+                className="px-3 py-1 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                onClick={() =>
+                  setSortBy((prev) => ({
+                    ...prev,
+                    direction: prev.direction === "asc" ? "desc" : "asc",
+                  }))
+                }
+              >
+                {sortBy.direction === "asc" ? "↑ Asc" : "↓ Desc"}
+              </button>
+
+              {/* Refresh icon if provided */}
+              {onRefresh && (
+                <button
+                  className="p-1.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                  onClick={onRefresh}
+                  title="Refresh data"
+                >
+                  ↻
+                </button>
+              )}
+            </div>
+          </div>
+
+          <select
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+            value={sortBy.field}
+            onChange={(e) => setSortBy({ field: e.target.value, direction: sortBy.direction })}
+          >
+            <option value="">None</option>
+            <option value="created_at">Created Date</option>
+            <option value="acceptanceDeadline">Deadline</option>
+            <option value="stake">Stake Amount</option>
+            {/* Only show Odds option in orderbook mode */}
+            {viewMode === "orderbook" && <option value="odds">Odds</option>}
+          </select>
         </div>
-
-     {/* Sort by – label + direction toggle on same line + select below */}
-<div>
-  <div className="flex items-center justify-between mb-1.5">
-    <label className="block text-sm font-medium text-gray-700">
-      Sort by
-    </label>
-
-    <div className="flex items-center gap-2">
-      {/* Direction toggle */}
-      <button
-        className="px-3 py-1 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-        onClick={() =>
-          setSortBy((prev) => ({
-            ...prev,
-            direction: prev.direction === "asc" ? "desc" : "asc",
-          }))
-        }
-      >
-        {sortBy.direction === "asc" ? "↑ Asc" : "↓ Desc"}
-      </button>
-
-      {/* Refresh icon if available */}
-      {onRefresh && (
-        <button
-          className="p-1.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
-          onClick={onRefresh}
-          title="Refresh data"
-        >
-          ↻
-        </button>
-      )}
-    </div>
-  </div>
-
-  <select
-    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-    value={sortBy.field}
-    onChange={(e) => setSortBy({ field: e.target.value, direction: sortBy.direction })}
-  >
-    <option value="">None</option>
-    <option value="created_at">Created Date</option>
-    <option value="acceptanceDeadline">Deadline</option>
-    <option value="stake">Stake Amount</option>
-    {viewMode === "orderbook" && <option value="odds">Odds</option>}
-  </select>
-</div>
-
-
       </div>
 
-      {/* Deadline checkbox – very close below search */}
+      {/* Deadline checkbox – only if option enabled */}
       {showPastDeadlineOption && (
-        <div className="pt-1">  {/* ← minimal padding, almost touching */}
+        <div className="pt-1">
           <label className="flex items-start gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -270,7 +293,7 @@ const orderbookData = useMemo(() => {
       )}
     </div>
 
-    {/* Showing info */}
+    {/* Showing info + liquidity */}
     <div className="mt-6 pt-5 border-t border-gray-100 text-sm text-gray-600">
       Showing <span className="font-medium">{showingFrom}–{showingTo}</span> of{" "}
       <span className="font-medium">{filteredContracts.length}</span> contract

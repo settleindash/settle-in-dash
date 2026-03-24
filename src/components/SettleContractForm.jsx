@@ -113,20 +113,12 @@ const SettleContractForm = ({
       const signHex = data.latest_signed_hex || data.unsigned_tx_hex;
       const cmd = `signrawtransactionwithkey "${signHex}" '["YOUR_PRIVATE_KEY_HERE"]' '${JSON.stringify(data.prevtxs, null, 2)}'`;
 
-      setInstructionMessage(
-        `Step 1 – Sign the transaction:\n${cmd}\n\n` +
-        (data.latest_signed_hex 
-          ? `(Previous partial signature exists for ${claimedOutcome}. Sign THIS hex to add your signature on top.)\n\n`
-          : `(Sign the unsigned transaction to start the chain for ${claimedOutcome}.)\n\n`) +
-        `Replace "YOUR_PRIVATE_KEY_HERE" with your private key (run dumpprivkey ${walletAddress} to get it).\n` +
-        `Run in Debug console → copy the "hex" value from result → paste below.\n\n` +
-        `Alternative: Use Sparrow Wallet (import key + script → load tx → sign → export).\n\n` +
-        `Review outputs before signing:\n` +
-        `  Winner: ${data.details.winner_amount} DASH → ${data.details.winner_address}\n` +
-        `  Platform fee: ${data.details.platform_fee} DASH\n` +
-        `  Miner fee (platform pays): ${data.details.miner_fee} DASH\n\n` +
-        `Paste the signed raw tx hex below.`
-      );
+
+    // Short, helpful message after fetch (no repetition of steps)
+    setInstructionMessage(
+      "1. Use decoderawtransaction <paste hex> to check inputs/outputs/fees before signing.\n" +
+      "2. Tip: If a previous signature exists, this adds yours on top (chaining)."
+    );
 
       setStatusMessage("Transaction data fetched. Follow steps above and paste signed raw tx hex below.");
     } catch (err) {
