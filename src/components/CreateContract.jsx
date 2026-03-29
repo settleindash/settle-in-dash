@@ -631,17 +631,18 @@ const handleSubmit = async (e) => {
                 className="border p-2 rounded w-full text-sm"
                 value={stake}
                 min="0.01"
+                max="100"
                 step="0.01"
                 onChange={(e) => {
                   const v = e.target.value;
                   if (v === "" || Number(v) > 0) setStake(v);
                 }}
-                placeholder="Enter stake amount (e.g., 1)"
+                placeholder="Stake amount must be between 0.01 and 100 DASH"
                 disabled={loading}
                 aria-label="Stake amount"
               />
               <p className="text-gray-600 text-xs mt-1">
-                Note: A small network fee (0.0001 DASH) will be deducted from your stake if the contract is refunded or settled.
+                Note: A small network fee (0.0001 DASH) will be deducted from your stake if the contract is refunded.
               </p>
             </div>
 

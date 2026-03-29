@@ -117,7 +117,7 @@ const SettleContractForm = ({
     // Short, helpful message after fetch (no repetition of steps)
     setInstructionMessage(
       "1. Use decoderawtransaction <paste hex> to check inputs/outputs/fees before signing.\n" +
-      "2. Tip: If a previous signature exists, this adds yours on top (chaining)."
+      "2. If a previous signature exists, this adds yours on top."
     );
 
       setStatusMessage("Transaction data fetched. Follow steps above and paste signed raw tx hex below.");
@@ -269,7 +269,7 @@ const SettleContractForm = ({
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm">
                 <p className="font-medium mb-2">Settlement Summary:</p>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Pot: {txData.details.pot} DASH</li>
+                  <li>Contract size: {txData.details.pot} DASH</li>
                   <li>Winner: {txData.details.winner_amount} DASH to {txData.details.winner_address}</li>
                   <li>Event creator fee (platform pays): {txData.details.event_creator_fee} DASH</li>
                   <li>Platform fee: {txData.details.platform_fee} DASH</li>

@@ -1,5 +1,5 @@
 <?php
-// api/grok.php - CLEAN VERSION (requires new local+timezone fields)
+// api/grok.php - CLEAN VERSION (with stronger Yes/No title enforcement)
 
 function debug_log($msg) {
     file_put_contents(__DIR__ . '/grok_debug.log', date('Y-m-d H:i:s') . " - " . $msg . PHP_EOL, FILE_APPEND | LOCK_EX);
@@ -37,7 +37,7 @@ if (!defined('XAI_API_KEY')) {
     exit;
 }
 
-// ─── Extract NEW fields only ───
+// ─── Extract fields ───
 $title                = trim($input['title'] ?? '');
 $category             = trim($input['category'] ?? '');
 $event_start_local    = trim($input['event_start_local'] ?? '');
@@ -48,7 +48,7 @@ $description          = trim($input['description'] ?? '');
 $possible_outcomes    = $input['possible_outcomes'] ?? [];
 $user_timezone        = trim($input['user_timezone'] ?? 'UTC');
 
-debug_log("Fields: start_local='$event_start_local' tz='$event_start_timezone'");
+debug_log("Fields: title='$title' start_local='$event_start_local' tz='$event_start_timezone'");
 
 // === VALIDATION ===
 $missing = [];
@@ -57,13 +57,14 @@ if (empty($category)) $missing[] = "category";
 if (empty($event_start_local)) $missing[] = "event_start_local";
 if (empty($event_start_timezone)) $missing[] = "event_start_timezone";
 if (empty($description)) $missing[] = "description";
-if (count($possible_outcomes) < 2) $missing[] = "at least 2 outcomes";
+if (count($possible_outcomes) !== 3) $missing[] = "exactly 3 outcomes";
 
 if (!empty($missing)) {
     echo json_encode([
         "is_valid" => false,
-        "reasoning" => "Missing required fields: " . implode(", ", $missing),
-        "improved_description" => $description
+        "reasoning" => "Missing or invalid required fields: " . implode(", ", $missing),
+        "improved_description" => $description,
+        "suggested_title" => null
     ]);
     exit;
 }
@@ -111,27 +112,26 @@ if ($expected_finish_local) {
 
 // Normalize outcomes
 $outcomes = array_filter(array_map('trim', (array)$possible_outcomes), 'strlen');
-if (count($outcomes) < 2) {
+if (count($outcomes) !== 3) {
     echo json_encode([
         "is_valid" => false,
-        "reasoning" => "At least 2 non-empty possible outcomes are required.",
-        "improved_description" => $description
+        "reasoning" => "Exactly 3 outcomes are required (Yes, No, Event canceled).",
+        "improved_description" => $description,
+        "suggested_title" => null
     ]);
     exit;
 }
 
-
 // ─── Prompt ───
+$prompt = "Respond **ONLY** with valid JSON. No markdown, no code blocks, no explanations, no extra text. The response must start with { and end with }. All strings must be properly escaped.
 
-$prompt = "Respond **ONLY** with valid JSON. No markdown, no code blocks, no explanations, no extra text. The response must start with { and end with }. All strings must be properly escaped.\n\n.
-You are an expert validator for prediction market events on SettleInDash. You MUST create clear, neutral, Polymarket-style descriptions that are easy to objectively settle, using verifiable facts.
+You are an expert validator for SettleInDASH prediction markets. You validate Yes/No events ONLY.
 
-CRITICAL FIRST STEP – AGGRESSIVE SOURCE SEARCH & CONSENSUS BUILDING – ALWAYS DO THIS FIRST:
-- Start by searching using the TITLE as primary query (outcomes and category).
-- Gather facts (date, time, venue, competition, status).
-- Use consensus to: fill gaps, correct minor errors (time offsets, venue), enhance description.
-- Note main confirming domains in reasoning (no full URLs).
-
+CRITICAL FIRST STEP – TITLE MUST BE A YES/NO QUESTION:
+- Title MUST be a clear, verifiable Yes/No question (contains 'will', 'does', 'is', 'can', 'would', ends with '?', etc.)
+- If title is NOT a Yes/No question (e.g., statement, open-ended, prediction without binary choice) → is_valid = false, reasoning explains why, suggest improved title.
+- Title examples (good): 'Will Brighton win against Bournemouth?', 'Does Bitcoin reach $100k by end of 2025?'
+- Bad: 'Brighton vs Bournemouth', 'Bitcoin price prediction'
 
 CRITICAL TIME CORRECTION RULES – FLEXIBLE CONSENSUS-BASED:
 - Compare user-provided local time against consensus from sources.
@@ -139,29 +139,15 @@ CRITICAL TIME CORRECTION RULES – FLEXIBLE CONSENSUS-BASED:
 - If variance >15 min but strong consensus exists, suggest corrected time in user's input format/timezone.
 - For imminent/today events: rely heavily on aggregator/live preview sources; do NOT require sole official-site confirmation if multi-source agreement is clear.
 - If no time consensus → set suggested to null and note uncertainty in timezone_note.
+- Please make add to the description that all other scenarioes than was stated in the questions counts as not a negative outcome, unless in the situation where the event was canceled, then the event will be handeled as canceled
 
-
-IMPROVED DESCRIPTION GUIDELINES – ADAPT TO CATEGORY \"$category\":
-- Use searched facts/sources to enhance detials.
+IMPROVED DESCRIPTION GUIDELINES:
+- Use searched facts/sources to enhance details.
 - Write in neutral, factual third-person language.
-- Always include: event details (date, local time, location), precise resolution criteria (from sources), primary sources (domains/URLs), tie-breakers, edge cases.
+- Always include: event details (date, local time, location), precise resolution criteria (from sources), primary sources (domains), tie-breakers, edge cases.
 - Keep concise (100–250 words), structured, verifiable.
-- Tailor to category:
-  - Politics/Elections: Polling close time, counting rules, certification date.
-  - Weather: Measurement location/method, metric, time window.
-  - Commodities/Stocks: Price metric, exchange, timestamp.
-  - Sports: Competition/stage, venue, rules (regular time? overtime?).
-  - Crypto: Asset/exchange, metric, timestamp (UTC).
-  - Other: Adapt (e.g., awards: announcement time, academy site).
+- Tailor to category and Yes/No nature.
 - If user description is good, enhance with facts/sources without changing meaning.
-- Use BEST PRACTICES FOR RULES and RESOLUTION CRITERIA
-
-CRITICAL TIME CORRECTION RULES – MUST FOLLOW:
-- Always verify user's local time against searched sources/schedules.
-- MUST suggest correct local time in user's timezone.
-- Do NOT accept errors — correct using official data.
-- Return suggested time as null if user's time is correct.
-- When suggesting, return in SAME format/timezone as user input (e.g., \"2026-01-20T21:00\") and include timezone name.
 
 User's browser timezone: $user_timezone
 
@@ -176,22 +162,24 @@ Event details:
 Task:
 1. Gather/verify facts for the event searching the internet
 2. Validate and correct times if needed
-3. Check clarity, resolvability, verifiability
-4. Create improved description optimized for easy settlement
+3. Check that title is a clear Yes/No question
+4. Check clarity, resolvability, verifiability
+5. Create improved description optimized for easy settlement
 
 Respond ONLY with valid JSON:
 {
   \"is_valid\": boolean,
-  \"reasoning\": \"short explanation – always reference local time and resolvability\",
+  \"reasoning\": \"short explanation – always reference if title is Yes/No question and resolvability\",
   \"improved_description\": \"neutral, precise, Polymarket-style market description\",
+  \"suggested_title\": \"improved Yes/No question title or null\",
   \"suggested_start_time\": \"YYYY-MM-DDTHH:mm (local time string in the user's timezone) or null\",
-  \"suggested_start_timezone\": \"IANA timezone name matching user's input (e.g. Europe/Paris, America/Chicago, Asia/Tokyo) or null\",
+  \"suggested_start_timezone\": \"IANA timezone name matching user's input or null\",
   \"suggested_finish_time\": \"YYYY-MM-DDTHH:mm (local time string) or null\",
   \"suggested_finish_timezone\": \"same IANA timezone as user input or null\",
   \"timezone_note\": \"string or null\"
 }
 
-Be practical for real-world prediction markets: prioritize strong multi-source consensus over perfect official-site coverage. Strict on ambiguity/resolution clarity, flexible on schedule verification when sources align.";
+Be practical for real-world prediction markets: prioritize strong multi-source consensus over perfect official-site coverage. Strict on ambiguity/resolution clarity and Yes/No title requirement, flexible on schedule verification when sources align.";
 
 $payload = [
     "model" => "grok-4-1-fast-reasoning",
@@ -250,10 +238,11 @@ try {
         throw new Exception("Missing required fields");
     }
 
-    // Now log the successful parsed result
+    // Log the successful parsed result
     debug_log("Grok full parsed response: " . json_encode($result, JSON_PRETTY_PRINT));
 
     $result['improved_description'] ??= $description;
+    $result['suggested_title'] ??= null;
     $result['suggested_start_time'] ??= null;
     $result['suggested_finish_time'] ??= null;
     $result['timezone_note'] ??= null;

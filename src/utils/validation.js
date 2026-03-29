@@ -137,9 +137,20 @@ export const validateContractCreation = async (data, selectedEvent) => {
     errors.push("Invalid position type: must be 'buy' or 'sell'");
   }
 
-  if (data.stake && (!isFinite(data.stake) || Number(data.stake) <= 0)) {
-    errors.push("Invalid stake: must be a positive number");
+
+   if (data.stake) {
+    const stakeAmount = Number(data.stake);
+
+    if (isNaN(stakeAmount) || stakeAmount <= 0) {
+      errors.push("Stake must be a positive number");
+    } else if (stakeAmount < 0.01) {
+      errors.push("Minimum stake is 0.01 DASH");
+    } else if (stakeAmount > 100) {
+      errors.push("Maximum stake is 100 DASH per contract");
+    }
   }
+
+
 
   if (data.odds && (!isFinite(data.odds) || Number(data.odds) <= 1)) {
     errors.push("Invalid odds: must be greater than 1");
